@@ -1,0 +1,7 @@
+{
+  "name": "Example Build Tool Mod",
+  "description": "This is an example mod that changes brickadia's build tool and shows how to use modinfo.json. Replace this with your actual mod!",
+  "author": "Mike Nolan",
+  "version": "1.0.0",
+  "icon": "icon.png"
+}
