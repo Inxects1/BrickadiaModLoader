@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 import os
 import json
 import shutil
@@ -49,8 +49,8 @@ class BrickadiaModLoader:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Brickadia Mod Loader v{self.VERSION}")
-        self.root.geometry("1100x850")
-        self.root.minsize(900, 700)
+        self.root.geometry("1200x950")
+        self.root.minsize(1100, 900)
         self.root.configure(bg="#2b2b2b")
         
         # Configuration
@@ -468,6 +468,20 @@ class BrickadiaModLoader:
         )
         settings_btn.pack(anchor="ne", padx=10, pady=5)
         
+        # Launch Brickadia button
+        launch_btn = tk.Button(
+            self.root,
+            text="🚀 Launch Brickadia",
+            command=self.launch_brickadia,
+            bg="#00aa00",
+            fg="#ffffff",
+            font=("Arial", 12, "bold"),
+            relief=tk.FLAT,
+            padx=30,
+            pady=10
+        )
+        launch_btn.pack(pady=10)
+        
         # Drop zone
         drop_frame = tk.Frame(self.root, bg="#3c3c3c", relief=tk.RAISED, bd=2)
         drop_frame.pack(pady=20, padx=20, fill=tk.X)
@@ -504,17 +518,59 @@ class BrickadiaModLoader:
         list_frame = tk.Frame(self.root, bg="#2b2b2b")
         list_frame.pack(pady=10, padx=20, fill=tk.X, expand=False)
         
+        # Header with title and search
+        header_frame = tk.Frame(list_frame, bg="#2b2b2b")
+        header_frame.pack(fill=tk.X, pady=5)
+        
         list_label = tk.Label(
-            list_frame,
+            header_frame,
             text="Installed Mods",
             font=("Arial", 14, "bold"),
             bg="#2b2b2b",
             fg="#ffffff"
         )
-        list_label.pack(anchor="w", pady=5)
+        list_label.pack(side=tk.LEFT)
+        
+        # Search frame
+        search_frame = tk.Frame(header_frame, bg="#2b2b2b")
+        search_frame.pack(side=tk.RIGHT)
+        
+        tk.Label(
+            search_frame,
+            text="🔍",
+            font=("Arial", 12),
+            bg="#2b2b2b",
+            fg="#ffffff"
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add('write', lambda *args: self.filter_mods())
+        
+        search_entry = tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            font=("Arial", 10),
+            bg="#3c3c3c",
+            fg="#ffffff",
+            insertbackground="#ffffff",
+            width=20
+        )
+        search_entry.pack(side=tk.LEFT, padx=5)
+        
+        # Filter dropdown
+        self.filter_var = tk.StringVar(value="All")
+        filter_menu = ttk.Combobox(
+            search_frame,
+            textvariable=self.filter_var,
+            values=["All", "Enabled", "Disabled"],
+            state="readonly",
+            width=10
+        )
+        filter_menu.pack(side=tk.LEFT, padx=5)
+        filter_menu.bind('<<ComboboxSelected>>', lambda e: self.filter_mods())
         
         # Treeview for mods with icons
-        tree_frame = tk.Frame(list_frame, bg="#2b2b2b", height=400)
+        tree_frame = tk.Frame(list_frame, bg="#2b2b2b", height=450)
         tree_frame.pack(fill=tk.BOTH, expand=False)
         tree_frame.pack_propagate(False)  # Don't let children resize the frame
         
@@ -603,6 +659,67 @@ class BrickadiaModLoader:
             pady=5
         )
         delete_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Separator
+        tk.Frame(btn_frame, bg="#555555", width=2, height=30).pack(side=tk.LEFT, padx=10)
+        
+        # Batch operations
+        batch_enable_btn = tk.Button(
+            btn_frame,
+            text="✓ Enable All",
+            command=self.enable_all_mods,
+            bg="#006600",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=15,
+            pady=5
+        )
+        batch_enable_btn.pack(side=tk.LEFT, padx=5)
+        
+        batch_disable_btn = tk.Button(
+            btn_frame,
+            text="✗ Disable All",
+            command=self.disable_all_mods,
+            bg="#664400",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=15,
+            pady=5
+        )
+        batch_disable_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Separator
+        tk.Frame(btn_frame, bg="#555555", width=2, height=30).pack(side=tk.LEFT, padx=10)
+        
+        # Game Settings button
+        game_settings_btn = tk.Button(
+            btn_frame,
+            text="🎮 Game Settings",
+            command=self.open_game_settings,
+            bg="#0066cc",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        )
+        game_settings_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Profiles button
+        profiles_btn = tk.Button(
+            btn_frame,
+            text="📋 Profiles",
+            command=self.open_profiles,
+            bg="#8800cc",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        )
+        profiles_btn.pack(side=tk.LEFT, padx=5)
     
     def on_drop(self, event):
         """Handle file drop event"""
@@ -915,46 +1032,8 @@ class BrickadiaModLoader:
             messagebox.showerror("Error", f"Failed to delete mod:\n{str(e)}")
     
     def refresh_mod_list(self):
-        """Refresh the mod list display"""
-        # Clear existing items
-        for item in self.mod_tree.get_children():
-            self.mod_tree.delete(item)
-        
-        # Clear old icons
-        self.mod_icons.clear()
-        
-        # Add mods
-        for mod_id, mod in self.mods.items():
-            status = "✓ Enabled" if mod['enabled'] else "✗ Disabled"
-            
-            # Create info text with description and author
-            info_parts = []
-            if mod.get('description'):
-                info_parts.append(mod['description'])
-            if mod.get('author'):
-                info_parts.append(f"by {mod['author']}")
-            if mod.get('version'):
-                info_parts.append(f"v{mod['version']}")
-            
-            info_text = " | ".join(info_parts) if info_parts else ""
-            
-            # Load icon if available
-            icon_image = None
-            icon_path = mod.get('icon', '')
-            if icon_path and Path(icon_path).exists():
-                try:
-                    from PIL import Image, ImageTk
-                    img = Image.open(icon_path)
-                    img = img.resize((48, 48), Image.Resampling.LANCZOS)
-                    icon_image = ImageTk.PhotoImage(img)
-                    # Store reference to prevent garbage collection
-                    self.mod_icons[mod_id] = icon_image
-                except Exception as e:
-                    print(f"Failed to load icon for {mod['name']}: {e}")
-            
-            # Insert with icon (store mod_id as hidden data using iid parameter)
-            self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
-                               values=(mod['name'], status, info_text))
+        """Refresh the mod list display - uses filter_mods to apply current filters"""
+        self.filter_mods()
     
     def open_settings(self):
         """Open settings window"""
@@ -1051,6 +1130,464 @@ class BrickadiaModLoader:
             padx=20,
             pady=10
         ).pack(pady=20)
+    
+    def launch_brickadia(self):
+        """Launch Brickadia game"""
+        try:
+            # Brickadia requires special Steam setup - open Steam library page instead
+            # This avoids license/authentication issues
+            
+            result = messagebox.askquestion(
+                "Launch Brickadia",
+                "Open Brickadia in your Steam library?\n\n"
+                "This will open Steam to the Brickadia page where you can click PLAY.\n\n"
+                "Note: Due to Brickadia's Steam setup, it must be launched\n"
+                "directly from Steam to avoid authentication errors.",
+                icon='question'
+            )
+            
+            if result == 'yes':
+                try:
+                    # Open Steam library filtered to Brickadia
+                    webbrowser.open('steam://nav/games/details/1386740')
+                    messagebox.showinfo(
+                        "Info", 
+                        "Steam should now open to Brickadia.\n\n"
+                        "Click the green PLAY button to launch the game."
+                    )
+                except Exception as e:
+                    # Fallback - open Steam library home
+                    try:
+                        webbrowser.open('steam://open/games')
+                        messagebox.showinfo(
+                            "Info",
+                            "Steam library opened.\n\n"
+                            "Please find Brickadia and click PLAY to launch it."
+                        )
+                    except:
+                        messagebox.showerror(
+                            "Error",
+                            "Could not open Steam.\n\n"
+                            "Please launch Brickadia manually from your Steam library."
+                        )
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open Steam:\n{str(e)}")
+    
+    def filter_mods(self):
+        """Filter mods based on search and filter criteria"""
+        search_text = self.search_var.get().lower()
+        filter_status = self.filter_var.get()
+        
+        # Clear existing items
+        for item in self.mod_tree.get_children():
+            self.mod_tree.delete(item)
+        
+        # Clear old icons
+        self.mod_icons.clear()
+        
+        # Add filtered mods
+        for mod_id, mod in self.mods.items():
+            # Apply status filter
+            if filter_status == "Enabled" and not mod['enabled']:
+                continue
+            elif filter_status == "Disabled" and mod['enabled']:
+                continue
+            
+            # Apply search filter
+            if search_text:
+                searchable = f"{mod['name']} {mod.get('description', '')} {mod.get('author', '')}".lower()
+                if search_text not in searchable:
+                    continue
+            
+            # Add mod to list
+            status = "✓ Enabled" if mod['enabled'] else "✗ Disabled"
+            
+            info_parts = []
+            if mod.get('description'):
+                info_parts.append(mod['description'])
+            if mod.get('author'):
+                info_parts.append(f"by {mod['author']}")
+            if mod.get('version'):
+                info_parts.append(f"v{mod['version']}")
+            
+            info_text = " | ".join(info_parts) if info_parts else ""
+            
+            # Load icon if available
+            icon_image = None
+            icon_path = mod.get('icon', '')
+            if icon_path and Path(icon_path).exists():
+                try:
+                    from PIL import Image, ImageTk
+                    img = Image.open(icon_path)
+                    img = img.resize((48, 48), Image.Resampling.LANCZOS)
+                    icon_image = ImageTk.PhotoImage(img)
+                    self.mod_icons[mod_id] = icon_image
+                except Exception as e:
+                    print(f"Failed to load icon for {mod['name']}: {e}")
+            
+            self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
+                               values=(mod['name'], status, info_text))
+    
+    def enable_all_mods(self):
+        """Enable all installed mods"""
+        confirm = messagebox.askyesno(
+            "Enable All Mods",
+            f"Enable all {len(self.mods)} mods?\n\nThis may take a moment."
+        )
+        if not confirm:
+            return
+        
+        enabled_count = 0
+        for mod_id, mod in self.mods.items():
+            if not mod['enabled']:
+                try:
+                    self.enable_mod(mod_id)
+                    enabled_count += 1
+                except Exception as e:
+                    print(f"Failed to enable {mod['name']}: {e}")
+        
+        self.refresh_mod_list()
+        messagebox.showinfo("Success", f"Enabled {enabled_count} mod(s)")
+    
+    def disable_all_mods(self):
+        """Disable all installed mods"""
+        confirm = messagebox.askyesno(
+            "Disable All Mods",
+            f"Disable all enabled mods?\n\nThis may take a moment."
+        )
+        if not confirm:
+            return
+        
+        disabled_count = 0
+        for mod_id, mod in self.mods.items():
+            if mod['enabled']:
+                try:
+                    self.disable_mod(mod_id)
+                    disabled_count += 1
+                except Exception as e:
+                    print(f"Failed to disable {mod['name']}: {e}")
+        
+        self.refresh_mod_list()
+        messagebox.showinfo("Success", f"Disabled {disabled_count} mod(s)")
+    
+    def open_profiles(self):
+        """Open mod profiles manager"""
+        profiles_window = tk.Toplevel(self.root)
+        profiles_window.title("Mod Profiles")
+        profiles_window.geometry("600x500")
+        profiles_window.configure(bg="#2b2b2b")
+        profiles_window.transient(self.root)
+        
+        # Title
+        tk.Label(
+            profiles_window,
+            text="Mod Profiles",
+            font=("Arial", 16, "bold"),
+            bg="#2b2b2b",
+            fg="#ffffff"
+        ).pack(pady=10)
+        
+        tk.Label(
+            profiles_window,
+            text="Save and load different mod configurations",
+            font=("Arial", 10),
+            bg="#2b2b2b",
+            fg="#888888"
+        ).pack(pady=5)
+        
+        # Profiles list
+        list_frame = tk.Frame(profiles_window, bg="#2b2b2b")
+        list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        profiles_listbox = tk.Listbox(
+            list_frame,
+            bg="#3c3c3c",
+            fg="#ffffff",
+            font=("Arial", 11),
+            yscrollcommand=scrollbar.set,
+            selectmode=tk.SINGLE
+        )
+        profiles_listbox.pack(fill=tk.BOTH, expand=True)
+        scrollbar.config(command=profiles_listbox.yview)
+        
+        # Load profiles
+        profiles_file = Path("profiles.json")
+        profiles = {}
+        if profiles_file.exists():
+            try:
+                with open(profiles_file, 'r') as f:
+                    profiles = json.load(f)
+            except:
+                pass
+        
+        def refresh_profiles_list():
+            profiles_listbox.delete(0, tk.END)
+            for profile_name in profiles.keys():
+                enabled_count = len([m for m in profiles[profile_name] if m in self.mods])
+                profiles_listbox.insert(tk.END, f"{profile_name} ({enabled_count} mods)")
+        
+        refresh_profiles_list()
+        
+        # Buttons frame
+        btn_frame = tk.Frame(profiles_window, bg="#2b2b2b")
+        btn_frame.pack(pady=10)
+        
+        def save_profile():
+            profile_name = tk.simpledialog.askstring("Save Profile", "Enter profile name:", parent=profiles_window)
+            if profile_name:
+                # Save list of enabled mod IDs
+                enabled_mods = [mod_id for mod_id, mod in self.mods.items() if mod['enabled']]
+                profiles[profile_name] = enabled_mods
+                
+                with open(profiles_file, 'w') as f:
+                    json.dump(profiles, f, indent=2)
+                
+                refresh_profiles_list()
+                messagebox.showinfo("Success", f"Profile '{profile_name}' saved with {len(enabled_mods)} mod(s)")
+        
+        def load_profile():
+            selection = profiles_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a profile to load")
+                return
+            
+            profile_name = list(profiles.keys())[selection[0]]
+            enabled_mods = profiles[profile_name]
+            
+            confirm = messagebox.askyesno(
+                "Load Profile",
+                f"Load profile '{profile_name}'?\n\nThis will:\n"
+                f"• Disable all currently enabled mods\n"
+                f"• Enable {len(enabled_mods)} mod(s) from this profile"
+            )
+            if not confirm:
+                return
+            
+            # Disable all mods first
+            for mod_id in self.mods:
+                if self.mods[mod_id]['enabled']:
+                    self.disable_mod(mod_id)
+            
+            # Enable mods from profile
+            enabled_count = 0
+            for mod_id in enabled_mods:
+                if mod_id in self.mods:
+                    self.enable_mod(mod_id)
+                    enabled_count += 1
+            
+            self.refresh_mod_list()
+            messagebox.showinfo("Success", f"Loaded profile '{profile_name}' ({enabled_count} mods enabled)")
+            profiles_window.destroy()
+        
+        def delete_profile():
+            selection = profiles_listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a profile to delete")
+                return
+            
+            profile_name = list(profiles.keys())[selection[0]]
+            confirm = messagebox.askyesno("Delete Profile", f"Delete profile '{profile_name}'?")
+            if confirm:
+                del profiles[profile_name]
+                with open(profiles_file, 'w') as f:
+                    json.dump(profiles, f, indent=2)
+                refresh_profiles_list()
+                messagebox.showinfo("Success", f"Profile '{profile_name}' deleted")
+        
+        tk.Button(
+            btn_frame,
+            text="💾 Save Current",
+            command=save_profile,
+            bg="#00aa00",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(
+            btn_frame,
+            text="📂 Load Profile",
+            command=load_profile,
+            bg="#0066cc",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(
+            btn_frame,
+            text="🗑️ Delete",
+            command=delete_profile,
+            bg="#aa0000",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
+    
+    def open_game_settings(self):
+        """Open GameUserSettings.ini editor"""
+        # Find GameUserSettings.ini path
+        user_home = Path.home()
+        settings_path = user_home / "AppData" / "Local" / "Brickadia" / "Saved" / "Config" / "Windows" / "GameUserSettings.ini"
+        
+        if not settings_path.exists():
+            # Try to create the directory structure
+            settings_path.parent.mkdir(parents=True, exist_ok=True)
+            messagebox.showwarning(
+                "Settings File Not Found",
+                f"GameUserSettings.ini not found at:\n{settings_path}\n\n"
+                "The file will be created when you launch Brickadia for the first time.\n"
+                "You can still create and edit it here."
+            )
+        
+        # Create settings editor window
+        settings_editor = tk.Toplevel(self.root)
+        settings_editor.title("Brickadia Game Settings")
+        settings_editor.geometry("800x600")
+        settings_editor.configure(bg="#2b2b2b")
+        settings_editor.transient(self.root)
+        
+        # Title
+        tk.Label(
+            settings_editor,
+            text="GameUserSettings.ini Editor",
+            font=("Arial", 16, "bold"),
+            bg="#2b2b2b",
+            fg="#ffffff"
+        ).pack(pady=10)
+        
+        # Path label
+        tk.Label(
+            settings_editor,
+            text=f"File: {settings_path}",
+            font=("Arial", 9),
+            bg="#2b2b2b",
+            fg="#888888"
+        ).pack(pady=5)
+        
+        # Text editor frame
+        editor_frame = tk.Frame(settings_editor, bg="#2b2b2b")
+        editor_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        
+        # Scrollbar
+        scrollbar = tk.Scrollbar(editor_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Text widget
+        text_editor = tk.Text(
+            editor_frame,
+            bg="#1e1e1e",
+            fg="#ffffff",
+            insertbackground="#ffffff",
+            font=("Consolas", 10),
+            yscrollcommand=scrollbar.set,
+            wrap=tk.NONE
+        )
+        text_editor.pack(fill=tk.BOTH, expand=True)
+        scrollbar.config(command=text_editor.yview)
+        
+        # Load existing content if file exists
+        if settings_path.exists():
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    text_editor.insert('1.0', content)
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to read settings file:\n{str(e)}")
+        else:
+            # Insert default template
+            default_content = """; Brickadia Game User Settings
+; Edit with caution - incorrect values may cause issues
+
+[/Script/Engine.GameUserSettings]
+ResolutionSizeX=1920
+ResolutionSizeY=1080
+WindowPosX=0
+WindowPosY=0
+FullscreenMode=1
+LastUserConfirmedResolutionSizeX=1920
+LastUserConfirmedResolutionSizeY=1080
+bUseVSync=False
+"""
+            text_editor.insert('1.0', default_content)
+        
+        # Buttons frame
+        buttons_frame = tk.Frame(settings_editor, bg="#2b2b2b")
+        buttons_frame.pack(pady=10)
+        
+        def save_game_settings():
+            try:
+                content = text_editor.get('1.0', tk.END)
+                # Remove trailing newline that tkinter adds
+                content = content.rstrip('\n')
+                
+                # Create directory if it doesn't exist
+                settings_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(settings_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                messagebox.showinfo("Success", "Game settings saved successfully!")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save settings:\n{str(e)}")
+        
+        def open_in_notepad():
+            try:
+                if settings_path.exists():
+                    os.startfile(settings_path)
+                else:
+                    messagebox.showwarning("File Not Found", "Please save the file first before opening in external editor.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to open in notepad:\n{str(e)}")
+        
+        # Save button
+        tk.Button(
+            buttons_frame,
+            text="💾 Save Settings",
+            command=save_game_settings,
+            bg="#00aa00",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Open in Notepad button
+        tk.Button(
+            buttons_frame,
+            text="📝 Open in Notepad",
+            command=open_in_notepad,
+            bg="#0066cc",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Close button
+        tk.Button(
+            buttons_frame,
+            text="Close",
+            command=settings_editor.destroy,
+            bg="#666666",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=5
+        ).pack(side=tk.LEFT, padx=5)
 
 
 def main():
