@@ -8,12 +8,20 @@ import rarfile
 from pathlib import Path
 from tkinterdnd2 import DND_FILES, TkinterDnD
 import configparser
+import urllib.request
+import webbrowser
+import subprocess
+import sys
+import tempfile
 
 
 class BrickadiaModLoader:
+    VERSION = "1.0.0"
+    GITHUB_REPO = "Inxects1/BrickadiaModLoader"
+    
     def __init__(self, root):
         self.root = root
-        self.root.title("Brickadia Mod Loader")
+        self.root.title(f"Brickadia Mod Loader v{self.VERSION}")
         self.root.geometry("800x600")
         self.root.configure(bg="#2b2b2b")
         
@@ -21,6 +29,13 @@ class BrickadiaModLoader:
         self.config_file = "config.ini"
         self.mods_data_file = "mods.json"
         self.load_config()
+        
+        # Check for updates
+        self.check_for_updates()
+        
+        # First time setup
+        if not self.config['Paths']['brickadia_paks']:
+            self.first_time_setup()
         
         # Mod storage
         self.mods = self.load_mods()
@@ -52,6 +67,228 @@ class BrickadiaModLoader:
         with open(self.config_file, 'w') as f:
             self.config.write(f)
     
+    def check_for_updates(self):
+        """Check GitHub for new version"""
+        try:
+            url = f"https://api.github.com/repos/{self.GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'BrickadiaModLoader')
+            
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                latest_version = data['tag_name'].lstrip('v')
+                
+                if latest_version != self.VERSION:
+                    result = messagebox.askyesno(
+                        "Update Available",
+                        f"A new version is available!\n\n"
+                        f"Current version: {self.VERSION}\n"
+                        f"Latest version: {latest_version}\n\n"
+                        f"Would you like to download the update?",
+                        icon='info'
+                    )
+                    
+                    if result:
+                        webbrowser.open(f"https://github.com/{self.GITHUB_REPO}/releases/latest")
+                        messagebox.showinfo(
+                            "Update Instructions",
+                            "Download the new BrickadiaModLoader.exe from the releases page.\n\n"
+                            "Replace your current exe with the new one.\n\n"
+                            "Your mods and settings will be preserved!"
+                        )
+        except Exception as e:
+            # Silently fail if update check fails (no internet, etc.)
+            pass
+    
+    def find_brickadia_installation(self):
+        """Try to automatically find Brickadia installation"""
+        possible_paths = [
+            Path("C:/Program Files/Brickadia"),
+            Path("C:/Program Files (x86)/Brickadia"),
+            Path("C:/Program Files/Steam/steamapps/common/Brickadia"),
+            Path("C:/Program Files (x86)/Steam/steamapps/common/Brickadia"),
+            Path.home() / "AppData" / "Local" / "Brickadia",
+        ]
+        
+        # Also check registry for Steam installation
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+            steam_path = winreg.QueryValueEx(key, "SteamPath")[0]
+            possible_paths.append(Path(steam_path) / "steamapps" / "common" / "Brickadia")
+        except:
+            pass
+        
+        for base_path in possible_paths:
+            pak_path = base_path / "Brickadia" / "Content" / "Paks"
+            if pak_path.exists() and pak_path.is_dir():
+                return str(pak_path)
+        
+        return None
+    
+    def first_time_setup(self):
+        """First time setup wizard"""
+        setup_window = tk.Toplevel(self.root)
+        setup_window.title("Welcome to Brickadia Mod Loader")
+        setup_window.geometry("600x400")
+        setup_window.configure(bg="#2b2b2b")
+        setup_window.transient(self.root)
+        setup_window.grab_set()
+        
+        # Make it modal
+        setup_window.protocol("WM_DELETE_WINDOW", lambda: None)
+        
+        # Title
+        tk.Label(
+            setup_window,
+            text="🎮 Welcome to Brickadia Mod Loader!",
+            font=("Arial", 18, "bold"),
+            bg="#2b2b2b",
+            fg="#ffffff"
+        ).pack(pady=20)
+        
+        tk.Label(
+            setup_window,
+            text="Let's set up your Brickadia installation",
+            font=("Arial", 12),
+            bg="#2b2b2b",
+            fg="#aaaaaa"
+        ).pack(pady=5)
+        
+        # Auto-detect
+        tk.Label(
+            setup_window,
+            text="Step 1: Locate Brickadia",
+            font=("Arial", 14, "bold"),
+            bg="#2b2b2b",
+            fg="#ffffff"
+        ).pack(pady=(30, 10))
+        
+        auto_detected = self.find_brickadia_installation()
+        
+        if auto_detected:
+            tk.Label(
+                setup_window,
+                text="✓ Brickadia installation detected!",
+                font=("Arial", 11),
+                bg="#2b2b2b",
+                fg="#00ff00"
+            ).pack(pady=5)
+            
+            tk.Label(
+                setup_window,
+                text=auto_detected,
+                font=("Arial", 9),
+                bg="#2b2b2b",
+                fg="#888888"
+            ).pack(pady=5)
+        else:
+            tk.Label(
+                setup_window,
+                text="⚠ Could not auto-detect Brickadia",
+                font=("Arial", 11),
+                bg="#2b2b2b",
+                fg="#ffaa00"
+            ).pack(pady=5)
+        
+        tk.Label(
+            setup_window,
+            text="Select your Brickadia installation folder:",
+            font=("Arial", 10),
+            bg="#2b2b2b",
+            fg="#aaaaaa"
+        ).pack(pady=(20, 5))
+        
+        # Path selection
+        path_frame = tk.Frame(setup_window, bg="#2b2b2b")
+        path_frame.pack(pady=10, padx=40, fill=tk.X)
+        
+        path_var = tk.StringVar(value=auto_detected if auto_detected else "")
+        path_entry = tk.Entry(
+            path_frame,
+            textvariable=path_var,
+            font=("Arial", 10),
+            state='readonly',
+            bg="#3c3c3c",
+            fg="#ffffff"
+        )
+        path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        
+        def browse_installation():
+            folder = filedialog.askdirectory(
+                title="Select Brickadia Installation Folder",
+                initialdir="C:/Program Files"
+            )
+            if folder:
+                # Look for Paks folder inside the selected directory
+                pak_path = Path(folder) / "Brickadia" / "Content" / "Paks"
+                if not pak_path.exists():
+                    # Try alternate structure
+                    pak_path = Path(folder) / "Content" / "Paks"
+                
+                if pak_path.exists():
+                    path_var.set(str(pak_path))
+                else:
+                    messagebox.showerror(
+                        "Invalid Folder",
+                        "Could not find Brickadia/Content/Paks folder in the selected directory.\n\n"
+                        "Please select the main Brickadia installation folder."
+                    )
+        
+        tk.Button(
+            path_frame,
+            text="Browse...",
+            command=browse_installation,
+            bg="#0066cc",
+            fg="#ffffff",
+            font=("Arial", 10, "bold"),
+            relief=tk.FLAT,
+            padx=15,
+            pady=5
+        ).pack(side=tk.LEFT)
+        
+        tk.Label(
+            setup_window,
+            text="Tip: Select the main Brickadia folder, we'll find the Paks folder automatically!",
+            font=("Arial", 9, "italic"),
+            bg="#2b2b2b",
+            fg="#888888"
+        ).pack(pady=10)
+        
+        # Continue button
+        def continue_setup():
+            if not path_var.get():
+                messagebox.showerror("Error", "Please select your Brickadia installation folder!")
+                return
+            
+            self.config['Paths']['brickadia_paks'] = path_var.get()
+            self.save_config()
+            setup_window.destroy()
+            
+            messagebox.showinfo(
+                "Setup Complete!",
+                "✓ Brickadia Mod Loader is ready to use!\n\n"
+                "You can now drag & drop mod files to install them."
+            )
+        
+        tk.Button(
+            setup_window,
+            text="Continue",
+            command=continue_setup,
+            bg="#00aa00",
+            fg="#ffffff",
+            font=("Arial", 12, "bold"),
+            relief=tk.FLAT,
+            padx=40,
+            pady=10
+        ).pack(pady=30)
+        
+        # Center the window
+        setup_window.update_idletasks()
+        x = (setup_window.winfo_screenwidth() // 2) - (setup_window.winfo_width() // 2)
+        y = (setup_window.winfo_screenheight() // 2) - (setup_window.winfo_height() // 2)
+        setup_window.geometry(f"+{x}+{y}")
+    
     def load_mods(self):
         """Load mods data from JSON file"""
         if os.path.exists(self.mods_data_file):
@@ -66,15 +303,27 @@ class BrickadiaModLoader:
     
     def create_widgets(self):
         """Create the GUI widgets"""
-        # Title
+        # Title with version
+        title_frame = tk.Frame(self.root, bg="#2b2b2b")
+        title_frame.pack(pady=10)
+        
         title_label = tk.Label(
-            self.root, 
+            title_frame, 
             text="Brickadia Mod Loader", 
             font=("Arial", 20, "bold"),
             bg="#2b2b2b",
             fg="#ffffff"
         )
-        title_label.pack(pady=10)
+        title_label.pack()
+        
+        version_label = tk.Label(
+            title_frame,
+            text=f"v{self.VERSION}",
+            font=("Arial", 9),
+            bg="#2b2b2b",
+            fg="#888888"
+        )
+        version_label.pack()
         
         # Settings button
         settings_btn = tk.Button(
