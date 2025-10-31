@@ -10,6 +10,11 @@ All notable changes to Brickadia Mod Loader will be documented in this file.
 - **First-Time Setup Wizard**: Guides users through initial setup with auto-detection of Brickadia installation
 - **Smart Installation Detection**: Automatically searches common installation paths for Brickadia
 - **Version Display**: Shows current version in the UI
+- **Mod Icon Support**: Display custom icons for mods in the mod list
+- **Multi-File Mod Support**: Automatically handles mods with multiple files (.pak, .ucas, .utoc, .sig, .ini, .txt)
+- **Enhanced Mod List UI**: Larger, more visual mod list with icons and detailed information
+- **Mod Metadata System**: Support for custom mod names, descriptions, authors, versions via modinfo.json
+- **Mod Creator Guide**: Comprehensive documentation for mod creators
 - Drag & drop support for .zip and .rar files
 - Enable/disable mods with one click
 - Visual mod management interface
@@ -25,10 +30,13 @@ All notable changes to Brickadia Mod Loader will be documented in this file.
 - 📦 **Archive Support** - Works with both .zip and .rar files
 - ✅ **Toggle System** - Enable/disable mods instantly
 - 🗂️ **Mod Management** - Track all installed mods and their status
+- 🎨 **Visual Mod List** - Display mod icons and detailed information at a glance
+- 📄 **Multi-File Support** - Automatically handles mods with multiple associated files
 - ⚙️ **Auto-Configuration** - Finds Brickadia automatically or guides you through setup
 - 💾 **Safe Operations** - Mods stored separately, easy to backup
 - 🔄 **Update Notifications** - Know when new versions are available
 - 🎮 **User Friendly** - Clean, modern dark theme interface
+- 🖼️ **Custom Mod Metadata** - Mod creators can add custom names, icons, descriptions
 
 ### Technical
 

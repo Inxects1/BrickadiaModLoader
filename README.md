@@ -72,13 +72,95 @@ The executable will be created in the `dist` folder.
    - **Disable**: Select a mod and click "Disable Mod" to deactivate it (removes from Brickadia folder)
    - **Delete**: Select a mod and click "Delete Mod" to permanently remove it
 
+## For Mod Creators 🛠️
+
+Want to make your mods look great in the mod loader? You can add custom metadata!
+
+### Adding Custom Mod Information
+
+Create a `modinfo.json` file in your mod archive alongside your .pak files:
+
+```json
+{
+  "name": "My Awesome Mod",
+  "description": "This mod adds cool new features to Brickadia!",
+  "author": "YourName",
+  "version": "1.0.0",
+  "icon": "icon.png"
+}
+```
+
+### Supported Fields
+
+- **name**: Display name for your mod (shown in the mod list)
+- **description**: Brief description of what your mod does
+- **author**: Your name or username
+- **version**: Version number (e.g., "1.0.0", "2.1.3")
+- **icon**: Path to an icon image file (PNG recommended, will be displayed at 48x48 pixels)
+
+### Icon Guidelines
+
+- **Format**: PNG, JPG, or other common image formats
+- **Size**: Any size (will be automatically resized to 48x48)
+- **Recommended**: 256x256 or 512x512 for best quality
+- **Location**: Include in the same archive as your .pak file
+
+### Multi-File Mods
+
+The mod loader automatically handles mods with multiple files! If your mod includes:
+
+- `.pak` - Main mod file
+- `.ucas` - Unreal Engine asset file
+- `.utoc` - Unreal Engine table of contents
+- `.sig` - Signature file
+- `.ini` - Configuration file
+- `.txt` - Documentation or readme
+
+Just include them all in your archive with the same base name (e.g., `MyMod.pak`, `MyMod.ucas`, `MyMod.utoc`), and the mod loader will handle them all together when enabling/disabling.
+
+### Example Mod Structure
+
+```
+MyAwesomeMod.zip
+├── MyAwesomeMod.pak
+├── MyAwesomeMod.ucas
+├── MyAwesomeMod.utoc
+├── MyAwesomeMod.sig
+├── modinfo.json
+└── icon.png
+```
+
+### Complete modinfo.json Example
+
+```json
+{
+  "name": "Ultimate Build Tools",
+  "description": "Adds 50+ new building tools and shortcuts for advanced builders",
+  "author": "BuildMaster",
+  "version": "2.3.1",
+  "icon": "icon.png"
+}
+```
+
+### Testing Your Mod
+
+1. Create your mod archive (.zip or .rar)
+2. Include all necessary files (.pak, .ucas, etc.)
+3. Add your `modinfo.json` and icon
+4. Test by dragging into the mod loader
+5. Check that your icon and info display correctly
+
+For more detailed information, see [MOD_CREATOR_GUIDE.md](MOD_CREATOR_GUIDE.md)
+
+---
+
 ## How It Works
 
-1. When you install a mod, the loader extracts any .pak files from the archive
-2. These .pak files are stored in your custom mods folder
-3. When you enable a mod, the .pak file is copied to your Brickadia Paks folder
-4. When you disable a mod, the .pak file is removed from the Brickadia Paks folder (but kept in storage)
-5. All mod states are tracked in a `mods.json` file
+1. When you install a mod, the loader extracts any .pak files (and related files) from the archive
+2. All mod files are stored together in a dedicated folder in your mods storage location
+3. When you enable a mod, all its files are copied to your Brickadia Paks folder
+4. When you disable a mod, all its files are removed from the Brickadia Paks folder (but kept in storage)
+5. All mod states and metadata are tracked in a `mods.json` file
 
 ## Configuration Files
 

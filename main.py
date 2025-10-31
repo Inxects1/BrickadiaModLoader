@@ -14,6 +14,33 @@ import subprocess
 import sys
 import tempfile
 
+# Set up WinRAR path for rarfile
+def setup_winrar():
+    """Find and set WinRAR executable path"""
+    possible_paths = [
+        r"C:\Program Files\WinRAR\UnRAR.exe",
+        r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
+        r"C:\Program Files\WinRAR\Rar.exe",
+        r"C:\Program Files (x86)\WinRAR\Rar.exe",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            rarfile.UNRAR_TOOL = path
+            return True
+    
+    # Check if unrar is in PATH
+    try:
+        subprocess.run(['unrar'], capture_output=True)
+        return True
+    except:
+        pass
+    
+    return False
+
+# Try to set up WinRAR on module load
+setup_winrar()
+
 
 class BrickadiaModLoader:
     VERSION = "1.0.0"
@@ -22,8 +49,8 @@ class BrickadiaModLoader:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Brickadia Mod Loader v{self.VERSION}")
-        self.root.geometry("900x750")
-        self.root.minsize(800, 650)
+        self.root.geometry("1100x850")
+        self.root.minsize(900, 700)
         self.root.configure(bg="#2b2b2b")
         
         # Configuration
@@ -475,7 +502,7 @@ class BrickadiaModLoader:
         
         # Mod list frame
         list_frame = tk.Frame(self.root, bg="#2b2b2b")
-        list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+        list_frame.pack(pady=10, padx=20, fill=tk.X, expand=False)
         
         list_label = tk.Label(
             list_frame,
@@ -486,9 +513,10 @@ class BrickadiaModLoader:
         )
         list_label.pack(anchor="w", pady=5)
         
-        # Treeview for mods
-        tree_frame = tk.Frame(list_frame, bg="#2b2b2b")
-        tree_frame.pack(fill=tk.BOTH, expand=True)
+        # Treeview for mods with icons
+        tree_frame = tk.Frame(list_frame, bg="#2b2b2b", height=400)
+        tree_frame.pack(fill=tk.BOTH, expand=False)
+        tree_frame.pack_propagate(False)  # Don't let children resize the frame
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(tree_frame)
@@ -500,31 +528,38 @@ class BrickadiaModLoader:
         style.configure("Treeview",
                        background="#3c3c3c",
                        foreground="white",
-                       rowheight=25,
-                       fieldbackground="#3c3c3c")
+                       rowheight=55,  # Larger rows for icons with padding
+                       fieldbackground="#3c3c3c",
+                       padding=5)  # Add padding around text
         style.configure("Treeview.Heading",
                        background="#444444",
                        foreground="white",
-                       relief=tk.FLAT)
+                       relief=tk.FLAT,
+                       padding=5)
         style.map('Treeview', background=[('selected', '#0066cc')])
         
         self.mod_tree = ttk.Treeview(
             tree_frame,
-            columns=("Name", "Status", "File"),
-            show="headings",
+            columns=("Name", "Status", "Info"),
+            show="tree headings",  # Show tree column for icons
             yscrollcommand=scrollbar.set
         )
         
+        self.mod_tree.heading("#0", text="")  # Icon column
         self.mod_tree.heading("Name", text="Mod Name")
         self.mod_tree.heading("Status", text="Status")
-        self.mod_tree.heading("File", text="File Name")
+        self.mod_tree.heading("Info", text="Details")
         
-        self.mod_tree.column("Name", width=300)
-        self.mod_tree.column("Status", width=100)
-        self.mod_tree.column("File", width=300)
+        self.mod_tree.column("#0", width=70, stretch=False)  # Icon column - increased width
+        self.mod_tree.column("Name", width=280)  # Increased for better spacing
+        self.mod_tree.column("Status", width=120)
+        self.mod_tree.column("Info", width=400)  # Increased to fill larger window
         
         self.mod_tree.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.mod_tree.yview)
+        
+        # Store for icon images (prevent garbage collection)
+        self.mod_icons = {}
         
         # Buttons frame
         btn_frame = tk.Frame(self.root, bg="#2b2b2b")
@@ -613,13 +648,41 @@ class BrickadiaModLoader:
                         rar_ref.extractall(temp_extract)
                 except rarfile.RarCannotExec as e:
                     shutil.rmtree(temp_extract, ignore_errors=True)
+                    
+                    # Check if WinRAR is actually installed
+                    winrar_paths = [
+                        r"C:\Program Files\WinRAR\UnRAR.exe",
+                        r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
+                    ]
+                    installed = any(os.path.exists(p) for p in winrar_paths)
+                    
+                    if installed:
+                        error_msg = (
+                            "Cannot extract .rar file - WinRAR is installed but not accessible.\n\n"
+                            "This might be a permissions issue.\n\n"
+                            "Solutions:\n"
+                            "1. Try converting your mod to a .zip file instead\n"
+                            "2. Run the mod loader as administrator\n"
+                            "3. Reinstall WinRAR\n\n"
+                            f"Error details: {str(e)}"
+                        )
+                    else:
+                        error_msg = (
+                            "Cannot extract .rar files - WinRAR/UnRAR not found.\n\n"
+                            "Solutions:\n"
+                            "1. Install WinRAR from: https://www.win-rar.com/download.html\n"
+                            "2. Or convert your mod to a .zip file instead\n\n"
+                            ".zip files work without any additional software!"
+                        )
+                    
+                    messagebox.showerror("RAR Extraction Failed", error_msg)
+                    return
+                except Exception as e:
+                    shutil.rmtree(temp_extract, ignore_errors=True)
                     messagebox.showerror(
                         "RAR Extraction Failed",
-                        "Cannot extract .rar files - WinRAR or UnRAR is not installed.\n\n"
-                        "Solutions:\n"
-                        "1. Install WinRAR from: https://www.win-rar.com/download.html\n"
-                        "2. Or convert your mod to a .zip file instead\n\n"
-                        ".zip files work without any additional software!"
+                        f"Error extracting RAR file:\n{str(e)}\n\n"
+                        "Try converting your mod to a .zip file instead."
                     )
                     return
             
@@ -630,6 +693,21 @@ class BrickadiaModLoader:
                 messagebox.showerror("Error", "No .pak files found in the archive!")
                 shutil.rmtree(temp_extract)
                 return
+            
+            # Find all additional files (ucas, utoc, sig, etc.) that might come with the pak
+            all_mod_files = []
+            for pak_file in pak_files:
+                # Add the pak file
+                all_mod_files.append(pak_file)
+                
+                # Look for related files with same base name
+                base_name = pak_file.stem
+                parent_dir = pak_file.parent
+                
+                for ext in ['.ucas', '.utoc', '.sig', '.ini', '.txt']:
+                    related_file = parent_dir / f"{base_name}{ext}"
+                    if related_file.exists() and related_file not in all_mod_files:
+                        all_mod_files.append(related_file)
             
             # Look for modinfo.json
             mod_info = None
@@ -648,7 +726,7 @@ class BrickadiaModLoader:
                 if icon_files:
                     icon_path = icon_files[0]
             
-            # Move pak files to mods storage
+            # Move pak files and related files to mods storage
             for pak_file in pak_files:
                 mod_name = pak_file.stem
                 
@@ -658,28 +736,37 @@ class BrickadiaModLoader:
                 else:
                     display_name = mod_name
                 
-                destination = Path(self.mods_storage_path) / pak_file.name
-                
-                # If file exists, add number suffix
+                # Create a folder for this mod
+                mod_folder = Path(self.mods_storage_path) / mod_name
                 counter = 1
-                while destination.exists():
-                    destination = Path(self.mods_storage_path) / f"{mod_name}_{counter}.pak"
+                while mod_folder.exists():
+                    mod_folder = Path(self.mods_storage_path) / f"{mod_name}_{counter}"
                     counter += 1
                 
-                shutil.copy2(pak_file, destination)
+                os.makedirs(mod_folder, exist_ok=True)
+                
+                # Copy all related files for this mod
+                related_files = [f for f in all_mod_files if f.stem == mod_name]
+                file_list = []
+                
+                for file in related_files:
+                    dest_file = mod_folder / file.name
+                    shutil.copy2(file, dest_file)
+                    file_list.append(file.name)
                 
                 # Copy icon if available
                 icon_dest = None
                 if icon_path:
-                    icon_dest = Path(self.mods_storage_path) / f"{destination.stem}_icon{icon_path.suffix}"
+                    icon_dest = mod_folder / f"icon{icon_path.suffix}"
                     shutil.copy2(icon_path, icon_dest)
                 
                 # Add to mods database
-                self.mods[destination.name] = {
+                mod_id = mod_folder.name
+                self.mods[mod_id] = {
                     'name': display_name,
-                    'file': destination.name,
+                    'folder': str(mod_folder),
+                    'files': file_list,
                     'enabled': False,
-                    'storage_path': str(destination),
                     'description': mod_info.get('description', '') if mod_info else '',
                     'author': mod_info.get('author', '') if mod_info else '',
                     'version': mod_info.get('version', '') if mod_info else '',
@@ -706,11 +793,10 @@ class BrickadiaModLoader:
             return
         
         for item in selection:
-            values = self.mod_tree.item(item, 'values')
-            file_name = values[2]
+            mod_id = item  # The item ID is the mod_id
             
-            if file_name in self.mods:
-                self.enable_mod(file_name)
+            if mod_id in self.mods:
+                self.enable_mod(mod_id)
         
         self.refresh_mod_list()
     
@@ -722,11 +808,10 @@ class BrickadiaModLoader:
             return
         
         for item in selection:
-            values = self.mod_tree.item(item, 'values')
-            file_name = values[2]
+            mod_id = item  # The item ID is the mod_id
             
-            if file_name in self.mods:
-                self.disable_mod(file_name)
+            if mod_id in self.mods:
+                self.disable_mod(mod_id)
         
         self.refresh_mod_list()
     
@@ -742,78 +827,87 @@ class BrickadiaModLoader:
             return
         
         for item in selection:
-            values = self.mod_tree.item(item, 'values')
-            file_name = values[2]
+            mod_id = item  # The item ID is the mod_id
             
-            if file_name in self.mods:
-                self.delete_mod(file_name)
+            if mod_id in self.mods:
+                self.delete_mod(mod_id)
         
         self.refresh_mod_list()
     
-    def enable_mod(self, file_name):
-        """Enable a mod by moving it to Brickadia paks folder"""
-        mod = self.mods[file_name]
+    def enable_mod(self, mod_id):
+        """Enable a mod by copying all its files to Brickadia paks folder"""
+        mod = self.mods[mod_id]
         
         if mod['enabled']:
             messagebox.showinfo("Info", f"{mod['name']} is already enabled")
             return
         
         try:
-            source = Path(mod['storage_path'])
-            destination = Path(self.config['Paths']['brickadia_paks']) / file_name
+            mod_folder = Path(mod['folder'])
+            game_paks = Path(self.config['Paths']['brickadia_paks'])
             
-            if not source.exists():
-                messagebox.showerror("Error", f"Mod file not found:\n{source}")
+            if not mod_folder.exists():
+                messagebox.showerror("Error", f"Mod folder not found:\n{mod_folder}")
                 return
             
-            shutil.copy2(source, destination)
+            # Copy all mod files to game directory
+            game_paths = []
+            for file_name in mod['files']:
+                source = mod_folder / file_name
+                destination = game_paks / file_name
+                
+                if source.exists():
+                    shutil.copy2(source, destination)
+                    game_paths.append(str(destination))
+            
             mod['enabled'] = True
-            mod['game_path'] = str(destination)
+            mod['game_paths'] = game_paths
             self.save_mods()
             
             messagebox.showinfo("Success", f"Enabled: {mod['name']}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to enable mod:\n{str(e)}")
     
-    def disable_mod(self, file_name):
-        """Disable a mod by removing it from Brickadia paks folder"""
-        mod = self.mods[file_name]
+    def disable_mod(self, mod_id):
+        """Disable a mod by removing all its files from Brickadia paks folder"""
+        mod = self.mods[mod_id]
         
         if not mod['enabled']:
             messagebox.showinfo("Info", f"{mod['name']} is already disabled")
             return
         
         try:
-            game_path = Path(mod.get('game_path', ''))
-            
-            if game_path.exists():
-                os.remove(game_path)
+            # Remove all mod files from game directory
+            for game_path_str in mod.get('game_paths', []):
+                game_path = Path(game_path_str)
+                if game_path.exists():
+                    os.remove(game_path)
             
             mod['enabled'] = False
-            if 'game_path' in mod:
-                del mod['game_path']
+            if 'game_paths' in mod:
+                del mod['game_paths']
             self.save_mods()
             
             messagebox.showinfo("Success", f"Disabled: {mod['name']}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to disable mod:\n{str(e)}")
     
-    def delete_mod(self, file_name):
+    def delete_mod(self, mod_id):
         """Delete a mod completely"""
-        mod = self.mods[file_name]
+        mod = self.mods[mod_id]
         
         try:
             # Disable first if enabled
             if mod['enabled']:
-                self.disable_mod(file_name)
+                self.disable_mod(mod_id)
             
-            # Delete from storage
-            storage_path = Path(mod['storage_path'])
-            if storage_path.exists():
-                os.remove(storage_path)
+            # Delete mod folder and all its contents
+            mod_folder = Path(mod['folder'])
+            if mod_folder.exists():
+                shutil.rmtree(mod_folder)
             
             # Remove from database
-            del self.mods[file_name]
+            del self.mods[mod_id]
             self.save_mods()
             
             messagebox.showinfo("Success", f"Deleted: {mod['name']}")
@@ -826,10 +920,41 @@ class BrickadiaModLoader:
         for item in self.mod_tree.get_children():
             self.mod_tree.delete(item)
         
+        # Clear old icons
+        self.mod_icons.clear()
+        
         # Add mods
-        for file_name, mod in self.mods.items():
+        for mod_id, mod in self.mods.items():
             status = "✓ Enabled" if mod['enabled'] else "✗ Disabled"
-            self.mod_tree.insert("", tk.END, values=(mod['name'], status, file_name))
+            
+            # Create info text with description and author
+            info_parts = []
+            if mod.get('description'):
+                info_parts.append(mod['description'])
+            if mod.get('author'):
+                info_parts.append(f"by {mod['author']}")
+            if mod.get('version'):
+                info_parts.append(f"v{mod['version']}")
+            
+            info_text = " | ".join(info_parts) if info_parts else ""
+            
+            # Load icon if available
+            icon_image = None
+            icon_path = mod.get('icon', '')
+            if icon_path and Path(icon_path).exists():
+                try:
+                    from PIL import Image, ImageTk
+                    img = Image.open(icon_path)
+                    img = img.resize((48, 48), Image.Resampling.LANCZOS)
+                    icon_image = ImageTk.PhotoImage(img)
+                    # Store reference to prevent garbage collection
+                    self.mod_icons[mod_id] = icon_image
+                except Exception as e:
+                    print(f"Failed to load icon for {mod['name']}: {e}")
+            
+            # Insert with icon (store mod_id as hidden data using iid parameter)
+            self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
+                               values=(mod['name'], status, info_text))
     
     def open_settings(self):
         """Open settings window"""
