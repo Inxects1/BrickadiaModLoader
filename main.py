@@ -43,15 +43,57 @@ setup_winrar()
 
 
 class BrickadiaModLoader:
-    VERSION = "1.0.0"
+    VERSION = "3.0.0"
     GITHUB_REPO = "Inxects1/BrickadiaModLoader"
     
     def __init__(self, root):
         self.root = root
         self.root.title(f"Brickadia Mod Loader v{self.VERSION}")
-        self.root.geometry("1200x950")
-        self.root.minsize(1100, 900)
-        self.root.configure(bg="#2b2b2b")
+        self.root.geometry("1400x1000")
+        self.root.minsize(1300, 950)
+        self.root.configure(bg="#1e1e1e")
+        
+        # Load and set window icon
+        try:
+            from PIL import Image, ImageTk
+            # Get the correct path for the logo (works for both script and exe)
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                application_path = sys._MEIPASS
+            else:
+                # Running as script
+                application_path = os.path.dirname(os.path.abspath(__file__))
+            
+            logo_path = Path(application_path) / "logo.png"
+            if logo_path.exists():
+                # Load logo for window icon (taskbar)
+                logo_img = Image.open(logo_path)
+                # Remove white background by making it transparent
+                if logo_img.mode == 'RGB':
+                    logo_img = logo_img.convert('RGBA')
+                # Make white pixels transparent
+                datas = logo_img.getdata()
+                newData = []
+                for item in datas:
+                    # If pixel is white (or close to white), make it transparent
+                    if item[0] > 240 and item[1] > 240 and item[2] > 240:
+                        newData.append((255, 255, 255, 0))
+                    else:
+                        newData.append(item)
+                logo_img.putdata(newData)
+                
+                # Set as window icon
+                self.logo_photo = ImageTk.PhotoImage(logo_img)
+                self.root.iconphoto(True, self.logo_photo)
+                
+                # Create smaller version for UI (32x32)
+                self.logo_ui = logo_img.resize((32, 32), Image.Resampling.LANCZOS)
+                self.logo_ui_photo = ImageTk.PhotoImage(self.logo_ui)
+            else:
+                self.logo_ui_photo = None
+        except Exception as e:
+            print(f"Failed to load logo: {e}")
+            self.logo_ui_photo = None
         
         # Configuration
         self.config_file = "config.ini"
@@ -187,7 +229,7 @@ class BrickadiaModLoader:
         setup_window = tk.Toplevel(self.root)
         setup_window.title("Welcome to Brickadia Mod Loader")
         setup_window.geometry("650x550")
-        setup_window.configure(bg="#2b2b2b")
+        setup_window.configure(bg="#1e1e1e")
         setup_window.transient(self.root)
         setup_window.grab_set()
         
@@ -431,117 +473,224 @@ class BrickadiaModLoader:
             json.dump(self.mods, f, indent=4)
     
     def create_widgets(self):
-        """Create the GUI widgets"""
-        # Title with version
-        title_frame = tk.Frame(self.root, bg="#2b2b2b")
-        title_frame.pack(pady=10)
+        """Create the GUI widgets with modern layout"""
+        # ===== TOP BAR =====
+        top_bar = tk.Frame(self.root, bg="#252525", height=70)
+        top_bar.pack(fill=tk.X, side=tk.TOP)
+        top_bar.pack_propagate(False)
+        
+        # Title section (left) with logo
+        title_section = tk.Frame(top_bar, bg="#252525")
+        title_section.pack(side=tk.LEFT, padx=20, pady=10)
+        
+        # Create horizontal layout for logo and text
+        title_inner = tk.Frame(title_section, bg="#252525")
+        title_inner.pack(anchor="w")
+        
+        # Logo on the left
+        if hasattr(self, 'logo_ui_photo') and self.logo_ui_photo:
+            logo_label = tk.Label(
+                title_inner,
+                image=self.logo_ui_photo,
+                bg="#252525"
+            )
+            logo_label.pack(side=tk.LEFT, padx=(0, 12))
+        
+        # Text on the right
+        text_frame = tk.Frame(title_inner, bg="#252525")
+        text_frame.pack(side=tk.LEFT)
         
         title_label = tk.Label(
-            title_frame, 
+            text_frame, 
             text="Brickadia Mod Loader", 
-            font=("Arial", 20, "bold"),
-            bg="#2b2b2b",
+            font=("Segoe UI", 18, "bold"),
+            bg="#252525",
             fg="#ffffff"
         )
-        title_label.pack()
+        title_label.pack(anchor="w")
         
         version_label = tk.Label(
-            title_frame,
+            text_frame,
             text=f"v{self.VERSION}",
-            font=("Arial", 9),
-            bg="#2b2b2b",
+            font=("Segoe UI", 9),
+            bg="#252525",
             fg="#888888"
         )
-        version_label.pack()
+        version_label.pack(anchor="w")
+        
+        # Action buttons (right side of top bar)
+        actions_frame = tk.Frame(top_bar, bg="#252525")
+        actions_frame.pack(side=tk.RIGHT, padx=20, pady=10)
+        
+        # Launch button (prominent)
+        launch_btn = tk.Button(
+            actions_frame,
+            text="🚀 Launch Game",
+            command=self.launch_brickadia,
+            bg="#4CAF50",
+            fg="#ffffff",
+            font=("Segoe UI", 11, "bold"),
+            relief=tk.FLAT,
+            padx=25,
+            pady=12,
+            cursor="hand2",
+            activebackground="#45a049"
+        )
+        launch_btn.pack(side=tk.RIGHT, padx=5)
         
         # Settings button
         settings_btn = tk.Button(
-            self.root,
-            text="⚙ Settings",
+            actions_frame,
+            text="⚙️ Settings",
             command=self.open_settings,
-            bg="#444444",
+            bg="#3a3a3a",
             fg="#ffffff",
-            font=("Arial", 10),
+            font=("Segoe UI", 10),
             relief=tk.FLAT,
-            padx=10,
-            pady=5
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
         )
-        settings_btn.pack(anchor="ne", padx=10, pady=5)
+        settings_btn.pack(side=tk.RIGHT, padx=5)
         
-        # Launch Brickadia button
-        launch_btn = tk.Button(
-            self.root,
-            text="🚀 Launch Brickadia",
-            command=self.launch_brickadia,
-            bg="#00aa00",
+        # Game Settings button
+        game_settings_btn = tk.Button(
+            actions_frame,
+            text="🎮 Game Settings",
+            command=self.open_game_settings,
+            bg="#3a3a3a",
             fg="#ffffff",
-            font=("Arial", 12, "bold"),
+            font=("Segoe UI", 10),
             relief=tk.FLAT,
-            padx=30,
-            pady=10
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
         )
-        launch_btn.pack(pady=10)
+        game_settings_btn.pack(side=tk.RIGHT, padx=5)
         
-        # Drop zone
-        drop_frame = tk.Frame(self.root, bg="#3c3c3c", relief=tk.RAISED, bd=2)
-        drop_frame.pack(pady=20, padx=20, fill=tk.X)
+        # ===== MAIN CONTENT AREA =====
+        main_content = tk.Frame(self.root, bg="#1e1e1e")
+        main_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+        
+        # Left side - Mod Library (wider)
+        left_panel = tk.Frame(main_content, bg="#1e1e1e")
+        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        
+        # Drop zone (compact, modern design)
+        drop_frame = tk.Frame(left_panel, bg="#2d2d2d", relief=tk.FLAT, bd=0, highlightthickness=2, highlightbackground="#3a3a3a")
+        drop_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        drop_inner = tk.Frame(drop_frame, bg="#2d2d2d")
+        drop_inner.pack(padx=20, pady=15)
+        
+        tk.Label(
+            drop_inner,
+            text="📦",
+            font=("Segoe UI", 24),
+            bg="#2d2d2d",
+            fg="#ffffff"
+        ).pack(side=tk.LEFT, padx=(0, 15))
+        
+        drop_text_frame = tk.Frame(drop_inner, bg="#2d2d2d")
+        drop_text_frame.pack(side=tk.LEFT)
         
         self.drop_label = tk.Label(
-            drop_frame,
-            text="📦 Drag & Drop .zip or .rar files here to install mods",
-            font=("Arial", 12),
-            bg="#3c3c3c",
-            fg="#aaaaaa",
-            pady=30
+            drop_text_frame,
+            text="Drop mod files here to install",
+            font=("Segoe UI", 12, "bold"),
+            bg="#2d2d2d",
+            fg="#ffffff"
         )
-        self.drop_label.pack(fill=tk.BOTH, expand=True)
+        self.drop_label.pack(anchor="w")
+        
+        tk.Label(
+            drop_text_frame,
+            text="Supports .zip, .rar, .7z, and .pak files",
+            font=("Segoe UI", 9),
+            bg="#2d2d2d",
+            fg="#888888"
+        ).pack(anchor="w")
+        
+        # Browse button
+        browse_btn = tk.Button(
+            drop_inner,
+            text="📁 Browse",
+            command=self.browse_archive,
+            bg="#4CAF50",
+            fg="#ffffff",
+            font=("Segoe UI", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            activebackground="#45a049"
+        )
+        browse_btn.pack(side=tk.LEFT, padx=(15, 0))
         
         # Enable drag and drop
         drop_frame.drop_target_register(DND_FILES)
         drop_frame.dnd_bind('<<Drop>>', self.on_drop)
         
-        # Browse button
-        browse_btn = tk.Button(
-            self.root,
-            text="Browse for Archive",
-            command=self.browse_archive,
-            bg="#0066cc",
-            fg="#ffffff",
-            font=("Arial", 10, "bold"),
-            relief=tk.FLAT,
-            padx=20,
-            pady=5
-        )
-        browse_btn.pack(pady=5)
+        # Mod library header with search
+        library_header = tk.Frame(left_panel, bg="#252525", height=50)
+        library_header.pack(fill=tk.X, pady=(0, 10))
+        library_header.pack_propagate(False)
         
-        # Mod list frame
-        list_frame = tk.Frame(self.root, bg="#2b2b2b")
-        list_frame.pack(pady=10, padx=20, fill=tk.X, expand=False)
-        
-        # Header with title and search
-        header_frame = tk.Frame(list_frame, bg="#2b2b2b")
-        header_frame.pack(fill=tk.X, pady=5)
+        # Left side - title and count
+        header_left = tk.Frame(library_header, bg="#252525")
+        header_left.pack(side=tk.LEFT, padx=15, pady=10)
         
         list_label = tk.Label(
-            header_frame,
-            text="Installed Mods",
-            font=("Arial", 14, "bold"),
-            bg="#2b2b2b",
+            header_left,
+            text="📚 Mod Library",
+            font=("Segoe UI", 14, "bold"),
+            bg="#252525",
             fg="#ffffff"
         )
         list_label.pack(side=tk.LEFT)
         
-        # Search frame
-        search_frame = tk.Frame(header_frame, bg="#2b2b2b")
+        self.mod_count_label = tk.Label(
+            header_left,
+            text="(0 mods)",
+            font=("Segoe UI", 10),
+            bg="#252525",
+            fg="#888888"
+        )
+        self.mod_count_label.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # Right side - search and filter
+        header_right = tk.Frame(library_header, bg="#252525")
+        header_right.pack(side=tk.RIGHT, padx=15, pady=10)
+        
+        # Filter dropdown
+        self.filter_var = tk.StringVar(value="All Mods")
+        filter_style = ttk.Style()
+        filter_style.configure("TCombobox", fieldbackground="#3a3a3a", background="#3a3a3a", foreground="#ffffff")
+        
+        filter_menu = ttk.Combobox(
+            header_right,
+            textvariable=self.filter_var,
+            values=["All Mods", "Enabled Only", "Disabled Only"],
+            state="readonly",
+            width=13,
+            font=("Segoe UI", 9)
+        )
+        filter_menu.pack(side=tk.RIGHT, padx=(10, 0))
+        filter_menu.bind('<<ComboboxSelected>>', lambda e: self.filter_mods())
+        
+        # Search entry
+        search_frame = tk.Frame(header_right, bg="#3a3a3a", relief=tk.FLAT)
         search_frame.pack(side=tk.RIGHT)
         
         tk.Label(
             search_frame,
             text="🔍",
-            font=("Arial", 12),
-            bg="#2b2b2b",
-            fg="#ffffff"
-        ).pack(side=tk.LEFT, padx=5)
+            font=("Segoe UI", 10),
+            bg="#3a3a3a",
+            fg="#888888"
+        ).pack(side=tk.LEFT, padx=(8, 5))
         
         self.search_var = tk.StringVar()
         self.search_var.trace_add('write', lambda *args: self.filter_mods())
@@ -549,177 +698,258 @@ class BrickadiaModLoader:
         search_entry = tk.Entry(
             search_frame,
             textvariable=self.search_var,
-            font=("Arial", 10),
-            bg="#3c3c3c",
+            font=("Segoe UI", 10),
+            bg="#3a3a3a",
             fg="#ffffff",
             insertbackground="#ffffff",
-            width=20
+            bd=0,
+            width=25,
+            relief=tk.FLAT
         )
-        search_entry.pack(side=tk.LEFT, padx=5)
+        search_entry.pack(side=tk.LEFT, padx=(0, 8), pady=6)
         
-        # Filter dropdown
-        self.filter_var = tk.StringVar(value="All")
-        filter_menu = ttk.Combobox(
-            search_frame,
-            textvariable=self.filter_var,
-            values=["All", "Enabled", "Disabled"],
-            state="readonly",
-            width=10
-        )
-        filter_menu.pack(side=tk.LEFT, padx=5)
-        filter_menu.bind('<<ComboboxSelected>>', lambda e: self.filter_mods())
-        
-        # Treeview for mods with icons
-        tree_frame = tk.Frame(list_frame, bg="#2b2b2b", height=450)
-        tree_frame.pack(fill=tk.BOTH, expand=False)
-        tree_frame.pack_propagate(False)  # Don't let children resize the frame
+        # Mod list (treeview)
+        tree_frame = tk.Frame(left_panel, bg="#2d2d2d")
+        tree_frame.pack(fill=tk.BOTH, expand=True)
         
         # Scrollbar
         scrollbar = ttk.Scrollbar(tree_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Configure style
+        # Configure modern style for treeview
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview",
-                       background="#3c3c3c",
-                       foreground="white",
-                       rowheight=55,  # Larger rows for icons with padding
-                       fieldbackground="#3c3c3c",
-                       padding=5)  # Add padding around text
-        style.configure("Treeview.Heading",
-                       background="#444444",
-                       foreground="white",
+        style.configure("ModTree.Treeview",
+                       background="#2d2d2d",
+                       foreground="#ffffff",
+                       rowheight=60,
+                       fieldbackground="#2d2d2d",
+                       borderwidth=0,
+                       relief=tk.FLAT)
+        style.configure("ModTree.Treeview.Heading",
+                       background="#252525",
+                       foreground="#ffffff",
+                       borderwidth=0,
                        relief=tk.FLAT,
-                       padding=5)
-        style.map('Treeview', background=[('selected', '#0066cc')])
+                       font=("Segoe UI", 10, "bold"))
+        style.map('ModTree.Treeview',
+                 background=[('selected', '#4CAF50')],
+                 foreground=[('selected', '#ffffff')])
         
         self.mod_tree = ttk.Treeview(
             tree_frame,
             columns=("Name", "Status", "Info"),
-            show="tree headings",  # Show tree column for icons
+            show="tree headings",
+            style="ModTree.Treeview",
             yscrollcommand=scrollbar.set
         )
         
-        self.mod_tree.heading("#0", text="")  # Icon column
+        self.mod_tree.heading("#0", text="")
         self.mod_tree.heading("Name", text="Mod Name")
         self.mod_tree.heading("Status", text="Status")
         self.mod_tree.heading("Info", text="Details")
         
-        self.mod_tree.column("#0", width=70, stretch=False)  # Icon column - increased width
-        self.mod_tree.column("Name", width=280)  # Increased for better spacing
-        self.mod_tree.column("Status", width=120)
-        self.mod_tree.column("Info", width=400)  # Increased to fill larger window
+        self.mod_tree.column("#0", width=70, stretch=False)
+        self.mod_tree.column("Name", width=300)
+        self.mod_tree.column("Status", width=100)
+        self.mod_tree.column("Info", width=380)
         
-        self.mod_tree.pack(fill=tk.BOTH, expand=True)
+        self.mod_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
         scrollbar.config(command=self.mod_tree.yview)
         
         # Store for icon images (prevent garbage collection)
         self.mod_icons = {}
         
-        # Buttons frame
-        btn_frame = tk.Frame(self.root, bg="#2b2b2b")
-        btn_frame.pack(pady=10)
+        # Right side - Mod Load Order
+        right_panel = tk.Frame(main_content, bg="#252525", width=280)
+        right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        right_panel.pack_propagate(False)
         
-        enable_btn = tk.Button(
+        # Load order header
+        order_header = tk.Frame(right_panel, bg="#252525")
+        order_header.pack(fill=tk.X, padx=15, pady=15)
+        
+        tk.Label(
+            order_header,
+            text="🔢 Load Order",
+            font=("Segoe UI", 12, "bold"),
+            bg="#252525",
+            fg="#ffffff"
+        ).pack(anchor="w")
+        
+        tk.Label(
+            order_header,
+            text="Drag mods to reorder",
+            font=("Segoe UI", 9),
+            bg="#252525",
+            fg="#888888"
+        ).pack(anchor="w")
+        
+        # Load order list
+        order_frame = tk.Frame(right_panel, bg="#2d2d2d")
+        order_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+        
+        order_scroll = ttk.Scrollbar(order_frame)
+        order_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.order_listbox = tk.Listbox(
+            order_frame,
+            bg="#2d2d2d",
+            fg="#ffffff",
+            font=("Segoe UI", 9),
+            selectbackground="#4CAF50",
+            selectforeground="#ffffff",
+            bd=0,
+            highlightthickness=0,
+            yscrollcommand=order_scroll.set
+        )
+        self.order_listbox.pack(fill=tk.BOTH, expand=True)
+        order_scroll.config(command=self.order_listbox.yview)
+        
+        # Order control buttons
+        order_btn_frame = tk.Frame(right_panel, bg="#252525")
+        order_btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+        
+        tk.Button(
+            order_btn_frame,
+            text="▲ Move Up",
+            command=self.move_mod_up,
+            bg="#3a3a3a",
+            fg="#ffffff",
+            font=("Segoe UI", 9),
+            relief=tk.FLAT,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        ).pack(fill=tk.X, pady=2)
+        
+        tk.Button(
+            order_btn_frame,
+            text="▼ Move Down",
+            command=self.move_mod_down,
+            bg="#3a3a3a",
+            fg="#ffffff",
+            font=("Segoe UI", 9),
+            relief=tk.FLAT,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        ).pack(fill=tk.X, pady=2)
+        
+        # ===== BOTTOM BAR - Action Buttons =====
+        bottom_bar = tk.Frame(self.root, bg="#252525", height=65)
+        bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        bottom_bar.pack_propagate(False)
+        
+        btn_frame = tk.Frame(bottom_bar, bg="#252525")
+        btn_frame.pack(pady=12)
+        
+        # Mod actions
+        tk.Label(
             btn_frame,
-            text="Enable Mod",
+            text="Selected Mod:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#252525",
+            fg="#888888"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        tk.Button(
+            btn_frame,
+            text="✓ Enable",
             command=self.enable_selected_mod,
-            bg="#00aa00",
+            bg="#4CAF50",
             fg="#ffffff",
-            font=("Arial", 10, "bold"),
+            font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
-            pady=5
-        )
-        enable_btn.pack(side=tk.LEFT, padx=5)
+            pady=8,
+            cursor="hand2",
+            activebackground="#45a049"
+        ).pack(side=tk.LEFT, padx=3)
         
-        disable_btn = tk.Button(
+        tk.Button(
             btn_frame,
-            text="Disable Mod",
+            text="✗ Disable",
             command=self.disable_selected_mod,
-            bg="#aa6600",
+            bg="#FF9800",
             fg="#ffffff",
-            font=("Arial", 10, "bold"),
+            font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
-            pady=5
-        )
-        disable_btn.pack(side=tk.LEFT, padx=5)
+            pady=8,
+            cursor="hand2",
+            activebackground="#e68900"
+        ).pack(side=tk.LEFT, padx=3)
         
-        delete_btn = tk.Button(
+        tk.Button(
             btn_frame,
-            text="Delete Mod",
+            text="🗑️ Delete",
             command=self.delete_selected_mod,
-            bg="#aa0000",
+            bg="#f44336",
             fg="#ffffff",
-            font=("Arial", 10, "bold"),
+            font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
-            pady=5
-        )
-        delete_btn.pack(side=tk.LEFT, padx=5)
+            pady=8,
+            cursor="hand2",
+            activebackground="#da190b"
+        ).pack(side=tk.LEFT, padx=3)
         
         # Separator
-        tk.Frame(btn_frame, bg="#555555", width=2, height=30).pack(side=tk.LEFT, padx=10)
+        tk.Frame(btn_frame, bg="#404040", width=2, height=35).pack(side=tk.LEFT, padx=15)
         
         # Batch operations
-        batch_enable_btn = tk.Button(
+        tk.Label(
             btn_frame,
-            text="✓ Enable All",
-            command=self.enable_all_mods,
-            bg="#006600",
-            fg="#ffffff",
-            font=("Arial", 10, "bold"),
-            relief=tk.FLAT,
-            padx=15,
-            pady=5
-        )
-        batch_enable_btn.pack(side=tk.LEFT, padx=5)
+            text="Batch:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#252525",
+            fg="#888888"
+        ).pack(side=tk.LEFT, padx=(0, 10))
         
-        batch_disable_btn = tk.Button(
+        tk.Button(
             btn_frame,
-            text="✗ Disable All",
-            command=self.disable_all_mods,
-            bg="#664400",
+            text="✓ All",
+            command=self.enable_all_mods,
+            bg="#2e7d32",
             fg="#ffffff",
-            font=("Arial", 10, "bold"),
+            font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
-            padx=15,
-            pady=5
-        )
-        batch_disable_btn.pack(side=tk.LEFT, padx=5)
+            padx=18,
+            pady=8,
+            cursor="hand2",
+            activebackground="#256428"
+        ).pack(side=tk.LEFT, padx=3)
+        
+        tk.Button(
+            btn_frame,
+            text="✗ All",
+            command=self.disable_all_mods,
+            bg="#F57C00",
+            fg="#ffffff",
+            font=("Segoe UI", 10, "bold"),
+            relief=tk.FLAT,
+            padx=18,
+            pady=8,
+            cursor="hand2",
+            activebackground="#db6f00"
+        ).pack(side=tk.LEFT, padx=3)
         
         # Separator
-        tk.Frame(btn_frame, bg="#555555", width=2, height=30).pack(side=tk.LEFT, padx=10)
-        
-        # Game Settings button
-        game_settings_btn = tk.Button(
-            btn_frame,
-            text="🎮 Game Settings",
-            command=self.open_game_settings,
-            bg="#0066cc",
-            fg="#ffffff",
-            font=("Arial", 10, "bold"),
-            relief=tk.FLAT,
-            padx=20,
-            pady=5
-        )
-        game_settings_btn.pack(side=tk.LEFT, padx=5)
+        tk.Frame(btn_frame, bg="#404040", width=2, height=35).pack(side=tk.LEFT, padx=15)
         
         # Profiles button
-        profiles_btn = tk.Button(
+        tk.Button(
             btn_frame,
             text="📋 Profiles",
             command=self.open_profiles,
-            bg="#8800cc",
+            bg="#9C27B0",
             fg="#ffffff",
-            font=("Arial", 10, "bold"),
+            font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
-            pady=5
-        )
-        profiles_btn.pack(side=tk.LEFT, padx=5)
+            pady=8,
+            cursor="hand2",
+            activebackground="#7B1FA2"
+        ).pack(side=tk.LEFT, padx=3)
     
     def on_drop(self, event):
         """Handle file drop event"""
@@ -1034,13 +1264,62 @@ class BrickadiaModLoader:
     def refresh_mod_list(self):
         """Refresh the mod list display - uses filter_mods to apply current filters"""
         self.filter_mods()
+        self.update_load_order_list()
+    
+    def update_load_order_list(self):
+        """Update the load order listbox with enabled mods"""
+        self.order_listbox.delete(0, tk.END)
+        
+        # Get all enabled mods sorted by load order
+        enabled_mods = [(mod_id, mod) for mod_id, mod in self.mods.items() if mod['enabled']]
+        enabled_mods.sort(key=lambda x: x[1].get('load_order', 999))
+        
+        for mod_id, mod in enabled_mods:
+            self.order_listbox.insert(tk.END, mod['name'])
+            # Store mod_id in listbox item data (for future use)
+    
+    def move_mod_up(self):
+        """Move selected mod up in load order"""
+        selection = self.order_listbox.curselection()
+        if not selection or selection[0] == 0:
+            return
+        
+        idx = selection[0]
+        # Get the text values
+        text = self.order_listbox.get(idx)
+        
+        # Delete and reinsert one position up
+        self.order_listbox.delete(idx)
+        self.order_listbox.insert(idx - 1, text)
+        self.order_listbox.selection_set(idx - 1)
+        
+        # TODO: Update actual load order in mods data
+        messagebox.showinfo("Info", "Mod load order feature coming soon!\n\nThis will control the order mods are loaded in-game.")
+    
+    def move_mod_down(self):
+        """Move selected mod down in load order"""
+        selection = self.order_listbox.curselection()
+        if not selection or selection[0] == self.order_listbox.size() - 1:
+            return
+        
+        idx = selection[0]
+        # Get the text values
+        text = self.order_listbox.get(idx)
+        
+        # Delete and reinsert one position down
+        self.order_listbox.delete(idx)
+        self.order_listbox.insert(idx + 1, text)
+        self.order_listbox.selection_set(idx + 1)
+        
+        # TODO: Update actual load order in mods data
+        messagebox.showinfo("Info", "Mod load order feature coming soon!\n\nThis will control the order mods are loaded in-game.")
     
     def open_settings(self):
         """Open settings window"""
         settings_window = tk.Toplevel(self.root)
         settings_window.title("Settings")
         settings_window.geometry("500x250")
-        settings_window.configure(bg="#2b2b2b")
+        settings_window.configure(bg="#1e1e1e")
         settings_window.transient(self.root)
         settings_window.grab_set()
         
@@ -1186,12 +1465,15 @@ class BrickadiaModLoader:
         # Clear old icons
         self.mod_icons.clear()
         
+        # Count for display
+        filtered_count = 0
+        
         # Add filtered mods
         for mod_id, mod in self.mods.items():
             # Apply status filter
-            if filter_status == "Enabled" and not mod['enabled']:
+            if filter_status == "Enabled Only" and not mod['enabled']:
                 continue
-            elif filter_status == "Disabled" and mod['enabled']:
+            elif filter_status == "Disabled Only" and mod['enabled']:
                 continue
             
             # Apply search filter
@@ -1228,6 +1510,14 @@ class BrickadiaModLoader:
             
             self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
                                values=(mod['name'], status, info_text))
+            filtered_count += 1
+        
+        # Update mod count label
+        total_count = len(self.mods)
+        if filtered_count == total_count:
+            self.mod_count_label.config(text=f"({total_count} mods)")
+        else:
+            self.mod_count_label.config(text=f"({filtered_count} of {total_count} mods)")
     
     def enable_all_mods(self):
         """Enable all installed mods"""
