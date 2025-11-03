@@ -16,46 +16,6 @@ A simple and intuitive mod loader for Brickadia that allows you to easily instal
 - 🔄 **Game Restart** - Restart Brickadia with one click
 - 📂 **Organized Storage** - Config and mod data stored together in mods folder
 
-## 📁 Project Structure
-
-```
-Brickadia Mod Loader/
-├── main.py                 # Main application file
-├── requirements.txt        # Python dependencies
-├── README.md              # This file
-├── LICENSE                # License information
-├── .gitignore             # Git ignore rules
-│
-├── assets/                # Visual assets
-│   ├── logo.png           # Original logo
-│   ├── logo_transparent.png
-│   ├── logo.ico           # Application icon
-│   └── README.md
-│
-├── docs/                  # Documentation
-│   ├── CHANGELOG.md
-│   ├── QUICKSTART.md
-│   ├── MOD_CREATOR_GUIDE.md
-│   ├── RELEASE_NOTES_*.md
-│   └── README.md
-│
-├── examples/              # Example mods and templates
-│   ├── example_mod/
-│   ├── example_mod.zip
-│   ├── mod_template.json
-│   └── README.md
-│
-├── scripts/               # Build and utility scripts
-│   ├── build_exe.ps1      # Build script (PowerShell)
-│   ├── build_exe.bat      # Build script (Batch)
-│   ├── BrickadiaModLoader.spec
-│   ├── make_transparent_icon.py
-│   └── README.md
-│
-├── build/                 # Build output (generated)
-└── dist/                  # Distribution files (generated)
-```
-
 ## Download & Installation
 
 ### For Users (Easy Way)
