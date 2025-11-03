@@ -1,7 +1,7 @@
 from PIL import Image
 
-# Open the logo
-img = Image.open('logo.png').convert('RGBA')
+# Open the logo from assets folder
+img = Image.open('../assets/logo.png').convert('RGBA')
 pixels = img.load()
 width, height = img.size
 
@@ -14,11 +14,11 @@ for y in range(height):
             pixels[x, y] = (255, 255, 255, 0)  # Make it transparent
 
 # Save as PNG with transparency
-img.save('logo_transparent.png')
+img.save('../assets/logo_transparent.png')
 print('✓ Transparent PNG created')
 
 # Save as ICO with multiple sizes
-img.save('logo.ico', format='ICO', sizes=[
+img.save('../assets/logo.ico', format='ICO', sizes=[
     (256, 256),
     (128, 128),
     (64, 64),

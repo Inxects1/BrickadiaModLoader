@@ -11,7 +11,8 @@ Write-Host ""
 try {
     $pythonVersion = python --version 2>&1
     Write-Host "Python found: $pythonVersion" -ForegroundColor Green
-} catch {
+}
+catch {
     Write-Host "ERROR: Python not found!" -ForegroundColor Red
     Write-Host "Please install Python 3.7+ and try again." -ForegroundColor Yellow
     Write-Host ""
@@ -23,6 +24,9 @@ try {
 Write-Host ""
 Write-Host "Cleaning previous builds..." -ForegroundColor Yellow
 
+# Change to project root directory
+Set-Location ..
+
 # Clean previous builds
 if (Test-Path "build") {
     Remove-Item -Path "build" -Recurse -Force
@@ -32,24 +36,13 @@ if (Test-Path "dist") {
     Remove-Item -Path "dist" -Recurse -Force
     Write-Host "  ✓ Cleaned dist folder" -ForegroundColor Gray
 }
-if (Test-Path "BrickadiaModLoader.spec") {
-    Remove-Item -Path "BrickadiaModLoader.spec" -Force
-    Write-Host "  ✓ Cleaned spec file" -ForegroundColor Gray
-}
 
 Write-Host ""
 Write-Host "Building executable with PyInstaller..." -ForegroundColor Cyan
 Write-Host ""
 
-# Build the executable
-python -m PyInstaller --name="BrickadiaModLoader" `
-    --onefile `
-    --windowed `
-    --hidden-import=tkinterdnd2 `
-    --hidden-import=rarfile `
-    --hidden-import=zipfile `
-    --collect-all=tkinterdnd2 `
-    main.py
+# Build the executable using the spec file
+python -m PyInstaller scripts\BrickadiaModLoader.spec
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
@@ -71,7 +64,8 @@ if (Test-Path "dist\BrickadiaModLoader.exe") {
     Write-Host "  2. Share 'BrickadiaModLoader.exe' with users" -ForegroundColor White
     Write-Host "  3. Include 'QUICKSTART.md' for instructions" -ForegroundColor White
     Write-Host ""
-} else {
+}
+else {
     Write-Host ""
     Write-Host "✗ BUILD FAILED!" -ForegroundColor Red
     Write-Host ""

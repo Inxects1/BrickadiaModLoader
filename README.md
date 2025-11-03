@@ -10,6 +10,51 @@ A simple and intuitive mod loader for Brickadia that allows you to easily instal
 - 🗂️ **Mod Management** - Keep all your mods organized in one place
 - ⚙️ **Easy Configuration** - Set your Brickadia installation path once
 - 💾 **Safe Storage** - Mods are stored separately and copied when enabled
+- 🎨 **Modern UI** - Clean, dark-themed interface with blue accents
+- 📋 **Load Order** - Visual load order with mod icons and drag-to-reorder
+- 🔍 **Duplicate Detection** - Automatically checks for duplicate mods
+- 🔄 **Game Restart** - Restart Brickadia with one click
+- 📂 **Organized Storage** - Config and mod data stored together in mods folder
+
+## 📁 Project Structure
+
+```
+Brickadia Mod Loader/
+├── main.py                 # Main application file
+├── requirements.txt        # Python dependencies
+├── README.md              # This file
+├── LICENSE                # License information
+├── .gitignore             # Git ignore rules
+│
+├── assets/                # Visual assets
+│   ├── logo.png           # Original logo
+│   ├── logo_transparent.png
+│   ├── logo.ico           # Application icon
+│   └── README.md
+│
+├── docs/                  # Documentation
+│   ├── CHANGELOG.md
+│   ├── QUICKSTART.md
+│   ├── MOD_CREATOR_GUIDE.md
+│   ├── RELEASE_NOTES_*.md
+│   └── README.md
+│
+├── examples/              # Example mods and templates
+│   ├── example_mod/
+│   ├── example_mod.zip
+│   ├── mod_template.json
+│   └── README.md
+│
+├── scripts/               # Build and utility scripts
+│   ├── build_exe.ps1      # Build script (PowerShell)
+│   ├── build_exe.bat      # Build script (Batch)
+│   ├── BrickadiaModLoader.spec
+│   ├── make_transparent_icon.py
+│   └── README.md
+│
+├── build/                 # Build output (generated)
+└── dist/                  # Distribution files (generated)
+```
 
 ## Download & Installation
 
@@ -38,16 +83,17 @@ python main.py
 
 ### Building the Executable
 
-To build your own executable:
+To build your own executable, use the provided build script:
 
 ```powershell
-python -m PyInstaller --name="BrickadiaModLoader" --onefile --windowed --hidden-import=tkinterdnd2 --hidden-import=rarfile --hidden-import=zipfile --collect-all=tkinterdnd2 main.py
+cd scripts
+.\build_exe.ps1
 ```
 
-Or use the provided build script:
+Or manually:
 
 ```powershell
-.\build_exe.ps1
+python -m PyInstaller scripts\BrickadiaModLoader.spec
 ```
 
 The executable will be created in the `dist` folder.
@@ -150,7 +196,7 @@ MyAwesomeMod.zip
 4. Test by dragging into the mod loader
 5. Check that your icon and info display correctly
 
-For more detailed information, see [MOD_CREATOR_GUIDE.md](MOD_CREATOR_GUIDE.md)
+For more detailed information, see [docs/MOD_CREATOR_GUIDE.md](docs/MOD_CREATOR_GUIDE.md)
 
 ---
 
@@ -164,8 +210,14 @@ For more detailed information, see [MOD_CREATOR_GUIDE.md](MOD_CREATOR_GUIDE.md)
 
 ## Configuration Files
 
-- `config.ini` - Stores your Brickadia installation path and mods storage location
-- `mods.json` - Keeps track of all installed mods and their states
+The mod loader stores its configuration files in your mods folder:
+
+- `[Mods Folder]/config.ini` - Stores your Brickadia installation path and mods storage location
+- `[Mods Folder]/mods.json` - Keeps track of all installed mods and their states
+
+**Default Location:** `%USERPROFILE%\BrickadiaModLoader\Mods\`
+
+This keeps all mod-related data organized in one place!
 
 ## Troubleshooting
 

@@ -14,6 +14,40 @@ import subprocess
 import sys
 import tempfile
 
+# Tooltip class for hover tooltips
+class ToolTip:
+    """Create a tooltip for a given widget"""
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+    
+    def show_tooltip(self, event=None):
+        """Display the tooltip"""
+        if self.tooltip_window or not self.text:
+            return
+        x, y, _, _ = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 25
+        
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        
+        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                        background="#2d2d2d", foreground="#ffffff",
+                        relief=tk.SOLID, borderwidth=1,
+                        font=("Segoe UI", 9), padx=8, pady=6)
+        label.pack()
+    
+    def hide_tooltip(self, event=None):
+        """Hide the tooltip"""
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
+
 # Set up WinRAR path for rarfile
 def setup_winrar():
     """Find and set WinRAR executable path"""
@@ -43,15 +77,47 @@ setup_winrar()
 
 
 class BrickadiaModLoader:
-    VERSION = "3.0.0"
+    VERSION = "3.1.0"
     GITHUB_REPO = "Inxects1/BrickadiaModLoader"
+    
+    # Theme Colors
+    THEME_BG_DARK = "#1e1e1e"      # Main background
+    THEME_BG_PANEL = "#252525"      # Panel backgrounds
+    THEME_BG_CARD = "#2d2d2d"       # Cards/frames
+    THEME_ACCENT = "#5DADE2"        # Primary accent color (Brickadia blue)
+    THEME_ACCENT_HOVER = "#4A9FD6"  # Accent hover state
+    THEME_TEXT = "#ffffff"          # Main text
+    THEME_TEXT_DIM = "#888888"      # Dimmed text
+    THEME_SUCCESS = "#4CAF50"       # Success/enable
+    THEME_WARNING = "#FF9800"       # Warning/disable
+    THEME_DANGER = "#f44336"        # Danger/delete
+    THEME_PURPLE = "#9C27B0"        # Special actions
     
     def __init__(self, root):
         self.root = root
         self.root.title(f"Brickadia Mod Loader v{self.VERSION}")
-        self.root.geometry("1400x1000")
         self.root.minsize(1300, 950)
-        self.root.configure(bg="#1e1e1e")
+        self.root.configure(bg=self.THEME_BG_DARK)
+        
+        # Load config first to get window position
+        # Temporarily use root location for initial config load
+        self.config_file = "config.ini"
+        self.load_config()
+        
+        # Now move config and mods.json to mods storage folder
+        self.setup_data_files()
+        
+        # Set window geometry from saved position or default
+        if 'Window' in self.config and self.config['Window'].get('geometry'):
+            self.root.geometry(self.config['Window']['geometry'])
+        else:
+            self.root.geometry("1400x1000")
+        
+        # Save window position on close
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Initialize drag and drop data
+        self.drag_data = {"index": None, "item": None}
         
         # Load and set window icon
         try:
@@ -60,11 +126,11 @@ class BrickadiaModLoader:
             if getattr(sys, 'frozen', False):
                 # Running as compiled executable
                 application_path = sys._MEIPASS
+                logo_path = Path(application_path) / "logo.png"
             else:
                 # Running as script
                 application_path = os.path.dirname(os.path.abspath(__file__))
-            
-            logo_path = Path(application_path) / "logo.png"
+                logo_path = Path(application_path) / "assets" / "logo.png"
             if logo_path.exists():
                 # Load logo for window icon (taskbar)
                 logo_img = Image.open(logo_path)
@@ -94,11 +160,6 @@ class BrickadiaModLoader:
         except Exception as e:
             print(f"Failed to load logo: {e}")
             self.logo_ui_photo = None
-        
-        # Configuration
-        self.config_file = "config.ini"
-        self.mods_data_file = "mods.json"
-        self.load_config()
         
         # First time setup (before showing main window)
         if not self.config['Paths']['brickadia_paks']:
@@ -132,16 +193,69 @@ class BrickadiaModLoader:
                 'brickadia_paks': '',
                 'mods_storage': str(Path.home() / 'BrickadiaModLoader' / 'Mods')
             }
+            self.config['Window'] = {
+                'geometry': '1400x1000'
+            }
             self.save_config()
+        
+        # Ensure Window section exists
+        if 'Window' not in self.config:
+            self.config['Window'] = {
+                'geometry': '1400x1000'
+            }
         
         # Create mods storage directory if it doesn't exist
         self.mods_storage_path = self.config['Paths']['mods_storage']
         os.makedirs(self.mods_storage_path, exist_ok=True)
+    
+    def setup_data_files(self):
+        """Move config and mods data files to mods storage folder"""
+        # Define new paths in mods storage folder
+        new_config_file = Path(self.mods_storage_path) / "config.ini"
+        new_mods_file = Path(self.mods_storage_path) / "mods.json"
+        
+        # Migrate old config file if it exists in root
+        old_config = Path("config.ini")
+        if old_config.exists() and not new_config_file.exists():
+            try:
+                import shutil
+                shutil.copy(old_config, new_config_file)
+                print(f"Migrated config.ini to {new_config_file}")
+            except Exception as e:
+                print(f"Could not migrate config: {e}")
+        
+        # Migrate old mods.json if it exists in root
+        old_mods = Path("mods.json")
+        if old_mods.exists() and not new_mods_file.exists():
+            try:
+                import shutil
+                shutil.copy(old_mods, new_mods_file)
+                print(f"Migrated mods.json to {new_mods_file}")
+            except Exception as e:
+                print(f"Could not migrate mods.json: {e}")
+        
+        # Update file paths to use new locations
+        self.config_file = str(new_config_file)
+        self.mods_data_file = str(new_mods_file)
+        
+        # Reload config from new location
+        if new_config_file.exists():
+            self.config.read(self.config_file)
+        else:
+            # Save config to new location
+            self.save_config()
         
     def save_config(self):
         """Save configuration to file"""
         with open(self.config_file, 'w') as f:
             self.config.write(f)
+    
+    def on_closing(self):
+        """Handle window closing - save position and exit"""
+        # Save window geometry
+        self.config['Window']['geometry'] = self.root.geometry()
+        self.save_config()
+        self.root.destroy()
     
     def check_for_updates(self):
         """Check GitHub for new version"""
@@ -229,7 +343,7 @@ class BrickadiaModLoader:
         setup_window = tk.Toplevel(self.root)
         setup_window.title("Welcome to Brickadia Mod Loader")
         setup_window.geometry("650x550")
-        setup_window.configure(bg="#1e1e1e")
+        setup_window.configure(bg=self.THEME_BG_DARK)
         setup_window.transient(self.root)
         setup_window.grab_set()
         
@@ -475,16 +589,16 @@ class BrickadiaModLoader:
     def create_widgets(self):
         """Create the GUI widgets with modern layout"""
         # ===== TOP BAR =====
-        top_bar = tk.Frame(self.root, bg="#252525", height=70)
+        top_bar = tk.Frame(self.root, bg=self.THEME_BG_PANEL, height=70)
         top_bar.pack(fill=tk.X, side=tk.TOP)
         top_bar.pack_propagate(False)
         
         # Title section (left) with logo
-        title_section = tk.Frame(top_bar, bg="#252525")
+        title_section = tk.Frame(top_bar, bg=self.THEME_BG_PANEL)
         title_section.pack(side=tk.LEFT, padx=20, pady=10)
         
         # Create horizontal layout for logo and text
-        title_inner = tk.Frame(title_section, bg="#252525")
+        title_inner = tk.Frame(title_section, bg=self.THEME_BG_PANEL)
         title_inner.pack(anchor="w")
         
         # Logo on the left
@@ -492,20 +606,20 @@ class BrickadiaModLoader:
             logo_label = tk.Label(
                 title_inner,
                 image=self.logo_ui_photo,
-                bg="#252525"
+                bg=self.THEME_BG_PANEL
             )
             logo_label.pack(side=tk.LEFT, padx=(0, 12))
         
         # Text on the right
-        text_frame = tk.Frame(title_inner, bg="#252525")
+        text_frame = tk.Frame(title_inner, bg=self.THEME_BG_PANEL)
         text_frame.pack(side=tk.LEFT)
         
         title_label = tk.Label(
             text_frame, 
             text="Brickadia Mod Loader", 
             font=("Segoe UI", 18, "bold"),
-            bg="#252525",
-            fg="#ffffff"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT
         )
         title_label.pack(anchor="w")
         
@@ -513,13 +627,13 @@ class BrickadiaModLoader:
             text_frame,
             text=f"v{self.VERSION}",
             font=("Segoe UI", 9),
-            bg="#252525",
-            fg="#888888"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT_DIM
         )
         version_label.pack(anchor="w")
         
         # Action buttons (right side of top bar)
-        actions_frame = tk.Frame(top_bar, bg="#252525")
+        actions_frame = tk.Frame(top_bar, bg=self.THEME_BG_PANEL)
         actions_frame.pack(side=tk.RIGHT, padx=20, pady=10)
         
         # Launch button (prominent)
@@ -527,16 +641,17 @@ class BrickadiaModLoader:
             actions_frame,
             text="🚀 Launch Game",
             command=self.launch_brickadia,
-            bg="#4CAF50",
-            fg="#ffffff",
+            bg=self.THEME_ACCENT,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 11, "bold"),
             relief=tk.FLAT,
             padx=25,
             pady=12,
             cursor="hand2",
-            activebackground="#45a049"
+            activebackground=self.THEME_ACCENT_HOVER
         )
         launch_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(launch_btn, "Launch Brickadia via Steam")
         
         # Settings button
         settings_btn = tk.Button(
@@ -544,7 +659,7 @@ class BrickadiaModLoader:
             text="⚙️ Settings",
             command=self.open_settings,
             bg="#3a3a3a",
-            fg="#ffffff",
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10),
             relief=tk.FLAT,
             padx=15,
@@ -553,6 +668,7 @@ class BrickadiaModLoader:
             activebackground="#4a4a4a"
         )
         settings_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(settings_btn, "Configure mod loader settings")
         
         # Game Settings button
         game_settings_btn = tk.Button(
@@ -560,7 +676,7 @@ class BrickadiaModLoader:
             text="🎮 Game Settings",
             command=self.open_game_settings,
             bg="#3a3a3a",
-            fg="#ffffff",
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10),
             relief=tk.FLAT,
             padx=15,
@@ -569,39 +685,91 @@ class BrickadiaModLoader:
             activebackground="#4a4a4a"
         )
         game_settings_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(game_settings_btn, "Edit GameUserSettings.ini")
+        
+        # Open Paks Folder button
+        paks_folder_btn = tk.Button(
+            actions_frame,
+            text="📁 Paks Folder",
+            command=self.open_paks_folder,
+            bg="#3a3a3a",
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        )
+        paks_folder_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(paks_folder_btn, "Open Brickadia Paks folder")
+        
+        # About button
+        about_btn = tk.Button(
+            actions_frame,
+            text="ℹ️ About",
+            command=self.open_about,
+            bg="#3a3a3a",
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        )
+        about_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(about_btn, "View on GitHub")
+        
+        # Check Duplicates button
+        check_dupes_btn = tk.Button(
+            actions_frame,
+            text="🔍 Check Duplicates",
+            command=self.check_for_duplicates,
+            bg="#3a3a3a",
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        )
+        check_dupes_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(check_dupes_btn, "Check for duplicate mods")
         
         # ===== MAIN CONTENT AREA =====
-        main_content = tk.Frame(self.root, bg="#1e1e1e")
+        main_content = tk.Frame(self.root, bg=self.THEME_BG_DARK)
         main_content.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
         # Left side - Mod Library (wider)
-        left_panel = tk.Frame(main_content, bg="#1e1e1e")
+        left_panel = tk.Frame(main_content, bg=self.THEME_BG_DARK)
         left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
         
         # Drop zone (compact, modern design)
-        drop_frame = tk.Frame(left_panel, bg="#2d2d2d", relief=tk.FLAT, bd=0, highlightthickness=2, highlightbackground="#3a3a3a")
+        drop_frame = tk.Frame(left_panel, bg=self.THEME_BG_CARD, relief=tk.FLAT, bd=0, highlightthickness=2, highlightbackground="#3a3a3a")
         drop_frame.pack(fill=tk.X, pady=(0, 15))
         
-        drop_inner = tk.Frame(drop_frame, bg="#2d2d2d")
+        drop_inner = tk.Frame(drop_frame, bg=self.THEME_BG_CARD)
         drop_inner.pack(padx=20, pady=15)
         
         tk.Label(
             drop_inner,
             text="📦",
             font=("Segoe UI", 24),
-            bg="#2d2d2d",
-            fg="#ffffff"
+            bg=self.THEME_BG_CARD,
+            fg=self.THEME_TEXT
         ).pack(side=tk.LEFT, padx=(0, 15))
         
-        drop_text_frame = tk.Frame(drop_inner, bg="#2d2d2d")
+        drop_text_frame = tk.Frame(drop_inner, bg=self.THEME_BG_CARD)
         drop_text_frame.pack(side=tk.LEFT)
         
         self.drop_label = tk.Label(
             drop_text_frame,
             text="Drop mod files here to install",
             font=("Segoe UI", 12, "bold"),
-            bg="#2d2d2d",
-            fg="#ffffff"
+            bg=self.THEME_BG_CARD,
+            fg=self.THEME_TEXT
         )
         self.drop_label.pack(anchor="w")
         
@@ -609,8 +777,8 @@ class BrickadiaModLoader:
             drop_text_frame,
             text="Supports .zip, .rar, .7z, and .pak files",
             font=("Segoe UI", 9),
-            bg="#2d2d2d",
-            fg="#888888"
+            bg=self.THEME_BG_CARD,
+            fg=self.THEME_TEXT_DIM
         ).pack(anchor="w")
         
         # Browse button
@@ -618,14 +786,14 @@ class BrickadiaModLoader:
             drop_inner,
             text="📁 Browse",
             command=self.browse_archive,
-            bg="#4CAF50",
-            fg="#ffffff",
+            bg=self.THEME_ACCENT,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
             pady=8,
             cursor="hand2",
-            activebackground="#45a049"
+            activebackground=self.THEME_ACCENT_HOVER
         )
         browse_btn.pack(side=tk.LEFT, padx=(15, 0))
         
@@ -634,20 +802,20 @@ class BrickadiaModLoader:
         drop_frame.dnd_bind('<<Drop>>', self.on_drop)
         
         # Mod library header with search
-        library_header = tk.Frame(left_panel, bg="#252525", height=50)
+        library_header = tk.Frame(left_panel, bg=self.THEME_BG_PANEL, height=50)
         library_header.pack(fill=tk.X, pady=(0, 10))
         library_header.pack_propagate(False)
         
         # Left side - title and count
-        header_left = tk.Frame(library_header, bg="#252525")
+        header_left = tk.Frame(library_header, bg=self.THEME_BG_PANEL)
         header_left.pack(side=tk.LEFT, padx=15, pady=10)
         
         list_label = tk.Label(
             header_left,
             text="📚 Mod Library",
             font=("Segoe UI", 14, "bold"),
-            bg="#252525",
-            fg="#ffffff"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT
         )
         list_label.pack(side=tk.LEFT)
         
@@ -655,13 +823,13 @@ class BrickadiaModLoader:
             header_left,
             text="(0 mods)",
             font=("Segoe UI", 10),
-            bg="#252525",
-            fg="#888888"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT_DIM
         )
         self.mod_count_label.pack(side=tk.LEFT, padx=(10, 0))
         
         # Right side - search and filter
-        header_right = tk.Frame(library_header, bg="#252525")
+        header_right = tk.Frame(library_header, bg=self.THEME_BG_PANEL)
         header_right.pack(side=tk.RIGHT, padx=15, pady=10)
         
         # Filter dropdown
@@ -733,8 +901,8 @@ class BrickadiaModLoader:
                        relief=tk.FLAT,
                        font=("Segoe UI", 10, "bold"))
         style.map('ModTree.Treeview',
-                 background=[('selected', '#4CAF50')],
-                 foreground=[('selected', '#ffffff')])
+                 background=[('selected', self.THEME_ACCENT)],
+                 foreground=[('selected', self.THEME_TEXT)])
         
         self.mod_tree = ttk.Treeview(
             tree_frame,
@@ -757,57 +925,77 @@ class BrickadiaModLoader:
         self.mod_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
         scrollbar.config(command=self.mod_tree.yview)
         
+        # Add right-click context menu
+        # On Windows, Button-3 is right-click
+        def on_right_click(event):
+            print("RIGHT CLICK DETECTED!")
+            self.show_context_menu(event)
+        
+        self.mod_tree.bind("<Button-3>", on_right_click)
+        
         # Store for icon images (prevent garbage collection)
         self.mod_icons = {}
         
         # Right side - Mod Load Order
-        right_panel = tk.Frame(main_content, bg="#252525", width=280)
+        right_panel = tk.Frame(main_content, bg=self.THEME_BG_PANEL, width=280)
         right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
         right_panel.pack_propagate(False)
         
         # Load order header
-        order_header = tk.Frame(right_panel, bg="#252525")
+        order_header = tk.Frame(right_panel, bg=self.THEME_BG_PANEL)
         order_header.pack(fill=tk.X, padx=15, pady=15)
         
         tk.Label(
             order_header,
             text="🔢 Load Order",
             font=("Segoe UI", 12, "bold"),
-            bg="#252525",
-            fg="#ffffff"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT
         ).pack(anchor="w")
         
         tk.Label(
             order_header,
             text="Drag mods to reorder",
             font=("Segoe UI", 9),
-            bg="#252525",
-            fg="#888888"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT_DIM
         ).pack(anchor="w")
         
-        # Load order list
-        order_frame = tk.Frame(right_panel, bg="#2d2d2d")
+        # Load order list with Canvas for custom rendering
+        order_frame = tk.Frame(right_panel, bg=self.THEME_BG_CARD)
         order_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
         
         order_scroll = ttk.Scrollbar(order_frame)
         order_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.order_listbox = tk.Listbox(
+        # Canvas for custom load order items with icons
+        self.order_canvas = tk.Canvas(
             order_frame,
-            bg="#2d2d2d",
-            fg="#ffffff",
-            font=("Segoe UI", 9),
-            selectbackground="#4CAF50",
-            selectforeground="#ffffff",
+            bg=self.THEME_BG_CARD,
             bd=0,
             highlightthickness=0,
             yscrollcommand=order_scroll.set
         )
-        self.order_listbox.pack(fill=tk.BOTH, expand=True)
-        order_scroll.config(command=self.order_listbox.yview)
+        self.order_canvas.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+        order_scroll.config(command=self.order_canvas.yview)
+        
+        # Frame inside canvas to hold mod items
+        self.order_inner_frame = tk.Frame(self.order_canvas, bg=self.THEME_BG_CARD)
+        self.order_canvas_window = self.order_canvas.create_window(0, 0, anchor='nw', window=self.order_inner_frame)
+        
+        # Bind to update scrollregion and canvas width
+        self.order_inner_frame.bind('<Configure>', lambda e: self.order_canvas.configure(scrollregion=self.order_canvas.bbox("all")))
+        self.order_canvas.bind('<Configure>', lambda e: self.order_canvas.itemconfig(self.order_canvas_window, width=e.width))
+        
+        # Store references for drag and drop
+        self.order_items = []  # List of frame widgets
+        self.drag_data = {"index": None, "item": None, "start_y": None}
+        
+        # Store load order icon cache
+        self.load_order_icons = {}
         
         # Order control buttons
-        order_btn_frame = tk.Frame(right_panel, bg="#252525")
+        order_btn_frame = tk.Frame(right_panel, bg=self.THEME_BG_PANEL)
         order_btn_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
         
         tk.Button(
@@ -835,11 +1023,11 @@ class BrickadiaModLoader:
         ).pack(fill=tk.X, pady=2)
         
         # ===== BOTTOM BAR - Action Buttons =====
-        bottom_bar = tk.Frame(self.root, bg="#252525", height=65)
+        bottom_bar = tk.Frame(self.root, bg=self.THEME_BG_PANEL, height=65)
         bottom_bar.pack(fill=tk.X, side=tk.BOTTOM)
         bottom_bar.pack_propagate(False)
         
-        btn_frame = tk.Frame(bottom_bar, bg="#252525")
+        btn_frame = tk.Frame(bottom_bar, bg=self.THEME_BG_PANEL)
         btn_frame.pack(pady=12)
         
         # Mod actions
@@ -847,16 +1035,16 @@ class BrickadiaModLoader:
             btn_frame,
             text="Selected Mod:",
             font=("Segoe UI", 9, "bold"),
-            bg="#252525",
-            fg="#888888"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT_DIM
         ).pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Button(
             btn_frame,
             text="✓ Enable",
             command=self.enable_selected_mod,
-            bg="#4CAF50",
-            fg="#ffffff",
+            bg=self.THEME_SUCCESS,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
@@ -869,8 +1057,8 @@ class BrickadiaModLoader:
             btn_frame,
             text="✗ Disable",
             command=self.disable_selected_mod,
-            bg="#FF9800",
-            fg="#ffffff",
+            bg=self.THEME_WARNING,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
@@ -883,8 +1071,8 @@ class BrickadiaModLoader:
             btn_frame,
             text="🗑️ Delete",
             command=self.delete_selected_mod,
-            bg="#f44336",
-            fg="#ffffff",
+            bg=self.THEME_DANGER,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
@@ -901,8 +1089,8 @@ class BrickadiaModLoader:
             btn_frame,
             text="Batch:",
             font=("Segoe UI", 9, "bold"),
-            bg="#252525",
-            fg="#888888"
+            bg=self.THEME_BG_PANEL,
+            fg=self.THEME_TEXT_DIM
         ).pack(side=tk.LEFT, padx=(0, 10))
         
         tk.Button(
@@ -910,7 +1098,7 @@ class BrickadiaModLoader:
             text="✓ All",
             command=self.enable_all_mods,
             bg="#2e7d32",
-            fg="#ffffff",
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=18,
@@ -924,7 +1112,7 @@ class BrickadiaModLoader:
             text="✗ All",
             command=self.disable_all_mods,
             bg="#F57C00",
-            fg="#ffffff",
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=18,
@@ -941,14 +1129,32 @@ class BrickadiaModLoader:
             btn_frame,
             text="📋 Profiles",
             command=self.open_profiles,
-            bg="#9C27B0",
-            fg="#ffffff",
+            bg=self.THEME_PURPLE,
+            fg=self.THEME_TEXT,
             font=("Segoe UI", 10, "bold"),
             relief=tk.FLAT,
             padx=20,
             pady=8,
             cursor="hand2",
             activebackground="#7B1FA2"
+        ).pack(side=tk.LEFT, padx=3)
+        
+        # Separator
+        tk.Frame(btn_frame, bg="#404040", width=2, height=35).pack(side=tk.LEFT, padx=15)
+        
+        # Restart Game button
+        tk.Button(
+            btn_frame,
+            text="🔄 Restart Game",
+            command=self.restart_game_with_changes,
+            bg=self.THEME_ACCENT,
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=8,
+            cursor="hand2",
+            activebackground=self.THEME_ACCENT_HOVER
         ).pack(side=tk.LEFT, padx=3)
     
     def on_drop(self, event):
@@ -1265,54 +1471,414 @@ class BrickadiaModLoader:
         """Refresh the mod list display - uses filter_mods to apply current filters"""
         self.filter_mods()
         self.update_load_order_list()
+        # Check for duplicates automatically
+        self.check_for_duplicates_silent()
+    
+    def check_for_duplicates_silent(self):
+        """Silently check for duplicates and update UI indicator"""
+        duplicates = self.find_duplicate_mods()
+        # You could add a visual indicator here if duplicates are found
+        if duplicates:
+            print(f"Warning: {len(duplicates)} duplicate mod(s) detected")
+    
+    def find_duplicate_mods(self):
+        """Find duplicate mods by name or file"""
+        duplicates = []
+        seen_names = {}
+        seen_files = {}
+        
+        for mod_id, mod in self.mods.items():
+            mod_name = mod['name'].lower()
+            
+            # Check for duplicate names
+            if mod_name in seen_names:
+                duplicates.append({
+                    'type': 'name',
+                    'mod1': seen_names[mod_name],
+                    'mod2': mod_id,
+                    'name': mod['name']
+                })
+            else:
+                seen_names[mod_name] = mod_id
+            
+            # Check for duplicate PAK files
+            for file_name in mod['files']:
+                file_lower = file_name.lower()
+                if file_lower in seen_files:
+                    duplicates.append({
+                        'type': 'file',
+                        'mod1': seen_files[file_lower],
+                        'mod2': mod_id,
+                        'file': file_name
+                    })
+                else:
+                    seen_files[file_lower] = mod_id
+        
+        return duplicates
+    
+    def check_for_duplicates(self):
+        """Show dialog with duplicate mods information"""
+        duplicates = self.find_duplicate_mods()
+        
+        if not duplicates:
+            messagebox.showinfo(
+                "No Duplicates Found",
+                "✓ No duplicate mods detected!\n\n"
+                "All your mods have unique names and files."
+            )
+            return
+        
+        # Create detailed message
+        dup_by_name = [d for d in duplicates if d['type'] == 'name']
+        dup_by_file = [d for d in duplicates if d['type'] == 'file']
+        
+        message = f"⚠️ Found {len(duplicates)} potential duplicate(s):\n\n"
+        
+        if dup_by_name:
+            message += f"📝 Duplicate Names ({len(dup_by_name)}):\n"
+            for dup in dup_by_name[:5]:  # Show first 5
+                mod1_name = self.mods[dup['mod1']]['name']
+                mod2_name = self.mods[dup['mod2']]['name']
+                message += f"  • {dup['name']}\n"
+            if len(dup_by_name) > 5:
+                message += f"  ... and {len(dup_by_name) - 5} more\n"
+            message += "\n"
+        
+        if dup_by_file:
+            message += f"📦 Duplicate Files ({len(dup_by_file)}):\n"
+            for dup in dup_by_file[:5]:  # Show first 5
+                message += f"  • {dup['file']}\n"
+            if len(dup_by_file) > 5:
+                message += f"  ... and {len(dup_by_file) - 5} more\n"
+            message += "\n"
+        
+        message += "Having duplicate mods may cause conflicts!\nConsider removing or disabling duplicates."
+        
+        messagebox.showwarning("Duplicate Mods Detected", message)
     
     def update_load_order_list(self):
-        """Update the load order listbox with enabled mods"""
-        self.order_listbox.delete(0, tk.END)
+        """Update the load order display with enabled mods and their icons"""
+        # Clear existing items
+        for item in self.order_items:
+            item.destroy()
+        self.order_items.clear()
         
         # Get all enabled mods sorted by load order
         enabled_mods = [(mod_id, mod) for mod_id, mod in self.mods.items() if mod['enabled']]
         enabled_mods.sort(key=lambda x: x[1].get('load_order', 999))
         
-        for mod_id, mod in enabled_mods:
-            self.order_listbox.insert(tk.END, mod['name'])
-            # Store mod_id in listbox item data (for future use)
+        for i, (mod_id, mod) in enumerate(enabled_mods, 1):
+            self.create_load_order_item(i, mod_id, mod)
+        
+        # Update canvas scroll region
+        self.order_canvas.update_idletasks()
+        self.order_canvas.configure(scrollregion=self.order_canvas.bbox("all"))
+    
+    def create_load_order_item(self, index, mod_id, mod):
+        """Create a visual load order item with icon and info"""
+        # Create item frame
+        item_frame = tk.Frame(
+            self.order_inner_frame,
+            bg="#353535",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#404040"
+        )
+        item_frame.pack(fill=tk.X, padx=5, pady=3)
+        
+        # Store mod_id as attribute
+        item_frame.mod_id = mod_id
+        item_frame.index = index
+        self.order_items.append(item_frame)
+        
+        # Left side: Number badge
+        number_frame = tk.Frame(item_frame, bg="#2d2d2d", width=35)
+        number_frame.pack(side=tk.LEFT, fill=tk.Y, padx=0, pady=0)
+        number_frame.pack_propagate(False)
+        
+        number_label = tk.Label(
+            number_frame,
+            text=f"#{index}",
+            font=("Segoe UI", 9, "bold"),
+            bg="#2d2d2d",
+            fg=self.THEME_ACCENT
+        )
+        number_label.pack(expand=True)
+        
+        # Mod icon
+        icon_label = tk.Label(item_frame, bg="#353535")
+        icon_label.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        # Load icon or use fallback
+        icon_image = self.get_load_order_icon(mod_id, mod)
+        icon_label.config(image=icon_image)
+        icon_label.image = icon_image  # Keep reference
+        
+        # Right side: Mod info
+        info_frame = tk.Frame(item_frame, bg="#353535")
+        info_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Mod name
+        name_label = tk.Label(
+            info_frame,
+            text=mod['name'],
+            font=("Segoe UI", 10, "bold"),
+            bg="#353535",
+            fg=self.THEME_TEXT,
+            anchor="w"
+        )
+        name_label.pack(fill=tk.X)
+        
+        # Mod metadata (version and author)
+        metadata_parts = []
+        if mod.get('version'):
+            metadata_parts.append(f"v{mod['version']}")
+        if mod.get('author'):
+            author_display = mod['author'][:20] + "..." if len(mod['author']) > 20 else mod['author']
+            metadata_parts.append(f"by {author_display}")
+        
+        if metadata_parts:
+            metadata_label = tk.Label(
+                info_frame,
+                text=" • ".join(metadata_parts),
+                font=("Segoe UI", 8),
+                bg="#353535",
+                fg=self.THEME_TEXT_DIM,
+                anchor="w"
+            )
+            metadata_label.pack(fill=tk.X)
+        
+        # Bind drag events to all components
+        for widget in [item_frame, number_frame, number_label, icon_label, info_frame, name_label]:
+            widget.bind('<Button-1>', self.on_load_order_click)
+            widget.bind('<B1-Motion>', self.on_load_order_drag)
+            widget.bind('<ButtonRelease-1>', self.on_load_order_drop)
+            widget.bind('<Enter>', lambda e, f=item_frame: f.config(bg="#404040"))
+            widget.bind('<Leave>', lambda e, f=item_frame: f.config(bg="#353535"))
+    
+    def get_load_order_icon(self, mod_id, mod):
+        """Get or create icon for load order display"""
+        # Check cache first
+        if mod_id in self.load_order_icons:
+            return self.load_order_icons[mod_id]
+        
+        # Try to load mod's icon
+        icon_path = mod.get('icon', '')
+        if icon_path and Path(icon_path).exists():
+            try:
+                from PIL import Image, ImageTk
+                img = Image.open(icon_path)
+                img = img.resize((40, 40), Image.Resampling.LANCZOS)
+                icon_image = ImageTk.PhotoImage(img)
+                self.load_order_icons[mod_id] = icon_image
+                return icon_image
+            except Exception as e:
+                print(f"Failed to load icon for {mod['name']}: {e}")
+        
+        # Fallback to program logo without white background
+        if self.logo_ui_photo:
+            # Resize logo to 40x40 for load order
+            try:
+                from PIL import Image, ImageTk
+                logo_resized = self.logo_ui.resize((40, 40), Image.Resampling.LANCZOS)
+                icon_image = ImageTk.PhotoImage(logo_resized)
+                self.load_order_icons[mod_id] = icon_image
+                return icon_image
+            except:
+                pass
+        
+        # Ultimate fallback: create a simple colored square
+        try:
+            from PIL import Image, ImageTk
+            fallback = Image.new('RGBA', (40, 40), (93, 173, 226, 255))  # Blue color
+            icon_image = ImageTk.PhotoImage(fallback)
+            self.load_order_icons[mod_id] = icon_image
+            return icon_image
+        except:
+            return None
+    
+    def get_fallback_icon_for_tree(self, mod_id):
+        """Get fallback icon for tree view (48x48)"""
+        # Check if we already have a cached fallback for this mod
+        cache_key = f"tree_{mod_id}"
+        if cache_key in self.mod_icons:
+            return self.mod_icons[cache_key]
+        
+        # Use program logo as fallback
+        if self.logo_ui_photo:
+            try:
+                from PIL import Image, ImageTk
+                logo_resized = self.logo_ui.resize((48, 48), Image.Resampling.LANCZOS)
+                icon_image = ImageTk.PhotoImage(logo_resized)
+                self.mod_icons[cache_key] = icon_image
+                return icon_image
+            except Exception as e:
+                print(f"Failed to create fallback icon: {e}")
+        
+        # Ultimate fallback: create a simple colored square
+        try:
+            from PIL import Image, ImageTk
+            fallback = Image.new('RGBA', (48, 48), (93, 173, 226, 255))  # Blue color
+            icon_image = ImageTk.PhotoImage(fallback)
+            self.mod_icons[cache_key] = icon_image
+            return icon_image
+        except:
+            return None
     
     def move_mod_up(self):
         """Move selected mod up in load order"""
-        selection = self.order_listbox.curselection()
-        if not selection or selection[0] == 0:
-            return
-        
-        idx = selection[0]
-        # Get the text values
-        text = self.order_listbox.get(idx)
-        
-        # Delete and reinsert one position up
-        self.order_listbox.delete(idx)
-        self.order_listbox.insert(idx - 1, text)
-        self.order_listbox.selection_set(idx - 1)
-        
-        # TODO: Update actual load order in mods data
-        messagebox.showinfo("Info", "Mod load order feature coming soon!\n\nThis will control the order mods are loaded in-game.")
+        # This function is deprecated with new visual load order
+        # Drag and drop is now the primary method
+        messagebox.showinfo("Tip", "Use drag-and-drop to reorder mods!\n\nClick and drag any mod in the load order list.")
     
     def move_mod_down(self):
         """Move selected mod down in load order"""
-        selection = self.order_listbox.curselection()
-        if not selection or selection[0] == self.order_listbox.size() - 1:
+        # This function is deprecated with new visual load order
+        # Drag and drop is now the primary method
+        messagebox.showinfo("Tip", "Use drag-and-drop to reorder mods!\n\nClick and drag any mod in the load order list.")
+    
+    def on_load_order_click(self, event):
+        """Handle mouse click on load order item"""
+        # Find which item was clicked
+        widget = event.widget
+        # Traverse up to find the item frame
+        while widget and widget != self.order_inner_frame:
+            if hasattr(widget, 'mod_id'):
+                self.drag_data["item"] = widget
+                self.drag_data["start_y"] = event.y_root
+                self.drag_data["index"] = self.order_items.index(widget)
+                widget.config(cursor="hand2")
+                return
+            widget = widget.master
+    
+    def on_load_order_drag(self, event):
+        """Handle dragging in load order list"""
+        if self.drag_data["item"] is None:
             return
         
-        idx = selection[0]
-        # Get the text values
-        text = self.order_listbox.get(idx)
+        # Only start dragging if mouse moved more than 5 pixels
+        if abs(event.y_root - self.drag_data.get("start_y", 0)) < 5:
+            return
         
-        # Delete and reinsert one position down
-        self.order_listbox.delete(idx)
-        self.order_listbox.insert(idx + 1, text)
-        self.order_listbox.selection_set(idx + 1)
+        # Find where to insert based on mouse position
+        current_index = self.drag_data["index"]
+        item = self.drag_data["item"]
         
-        # TODO: Update actual load order in mods data
-        messagebox.showinfo("Info", "Mod load order feature coming soon!\n\nThis will control the order mods are loaded in-game.")
+        # Calculate new position based on y coordinate
+        for i, other_item in enumerate(self.order_items):
+            if i == current_index:
+                continue
+            
+            # Get the y position of this item
+            y_pos = other_item.winfo_y()
+            height = other_item.winfo_height()
+            
+            # Check if mouse is over this item
+            if y_pos <= event.y_root - self.order_canvas.winfo_rooty() <= y_pos + height:
+                if i != current_index:
+                    # Move the item
+                    self.order_items.pop(current_index)
+                    self.order_items.insert(i, item)
+                    self.drag_data["index"] = i
+                    
+                    # Re-pack items in new order
+                    for item_widget in self.order_items:
+                        item_widget.pack_forget()
+                    for item_widget in self.order_items:
+                        item_widget.pack(fill=tk.X, padx=5, pady=3)
+                    
+                    # Update numbers
+                    self.renumber_load_order()
+                    break
+    
+    def on_load_order_drop(self, event):
+        """Handle mouse release after dragging"""
+        if self.drag_data["item"]:
+            self.drag_data["item"].config(cursor="")
+        self.drag_data = {"index": None, "item": None, "start_y": None}
+    
+    def renumber_load_order(self):
+        """Renumber the load order items after reordering"""
+        for i, item in enumerate(self.order_items, 1):
+            # Find the number label and update it
+            for child in item.winfo_children():
+                if isinstance(child, tk.Frame):
+                    for label in child.winfo_children():
+                        if isinstance(label, tk.Label) and label.cget('text').startswith('#'):
+                            label.config(text=f"#{i}")
+                            break
+    
+    def show_context_menu(self, event):
+        """Show right-click context menu for mod"""
+        print(f"Context menu triggered! Event: {event}, x={event.x}, y={event.y}")
+        
+        # Select the item under cursor
+        item = self.mod_tree.identify_row(event.y)
+        print(f"Identified item: {item}")
+        if not item:
+            print("No item found under cursor")
+            return
+            
+        self.mod_tree.selection_set(item)
+        
+        # Get mod info - the item ID is the mod_id (key in self.mods)
+        try:
+            mod_id = item
+            mod_data = self.mods.get(mod_id)
+            
+            if not mod_data:
+                print(f"Mod data not found for ID: {mod_id}")
+                return
+            
+            mod_name = mod_data['name']
+            print(f"Creating context menu for: {mod_name}")
+        except Exception as e:
+            print(f"Error getting mod info: {e}")
+            return
+        
+        # Create context menu
+        context_menu = tk.Menu(self.root, tearoff=0, 
+                              bg="#2d2d2d", fg="#ffffff",
+                              activebackground=self.THEME_ACCENT,
+                              activeforeground="#ffffff")
+        
+        # Add menu items based on mod status
+        if mod_data['enabled']:
+            context_menu.add_command(label="✗ Disable Mod", 
+                                    command=self.disable_selected_mod)
+        else:
+            context_menu.add_command(label="✓ Enable Mod", 
+                                    command=self.enable_selected_mod)
+        
+        context_menu.add_separator()
+        context_menu.add_command(label="🗑️ Delete Mod", 
+                                command=self.delete_selected_mod)
+        context_menu.add_separator()
+        context_menu.add_command(label="📁 Open Mod Folder", 
+                                command=lambda: self.open_mod_folder(mod_data))
+        context_menu.add_command(label="📋 Copy Mod Name", 
+                                command=lambda: self.copy_to_clipboard(mod_name))
+        
+        # Show menu at cursor position
+        print(f"Showing menu at position: {event.x_root}, {event.y_root}")
+        try:
+            context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            context_menu.grab_release()
+    
+    def open_mod_folder(self, mod_data):
+        """Open the folder containing the mod file"""
+        mod_folder = Path(mod_data['folder'])
+        if mod_folder.exists():
+            subprocess.Popen(f'explorer "{mod_folder}"')
+        else:
+            messagebox.showerror("Error", "Mod folder not found!")
+    
+    def copy_to_clipboard(self, text):
+        """Copy text to clipboard"""
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        messagebox.showinfo("Copied", f"Copied to clipboard:\n{text}")
     
     def open_settings(self):
         """Open settings window"""
@@ -1410,6 +1976,73 @@ class BrickadiaModLoader:
             pady=10
         ).pack(pady=20)
     
+    def is_brickadia_running(self):
+        """Check if Brickadia is currently running"""
+        import psutil
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] and 'brickadia' in proc.info['name'].lower():
+                    return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        return False
+    
+    def close_brickadia(self):
+        """Close Brickadia if it's running"""
+        import psutil
+        closed = False
+        for proc in psutil.process_iter(['name']):
+            try:
+                if proc.info['name'] and 'brickadia' in proc.info['name'].lower():
+                    proc.terminate()  # Graceful shutdown
+                    closed = True
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        if closed:
+            # Wait a moment for the process to close
+            import time
+            time.sleep(2)
+        
+        return closed
+    
+    def restart_game_with_changes(self):
+        """Close game, apply changes, and relaunch"""
+        if not self.is_brickadia_running():
+            messagebox.showinfo(
+                "Game Not Running",
+                "Brickadia is not currently running.\n\n"
+                "Your mod changes have been applied.\n"
+                "Click 'Launch Game' to start Brickadia."
+            )
+            return
+        
+        result = messagebox.askquestion(
+            "Restart Game",
+            "This will close Brickadia and relaunch it with your current mod configuration.\n\n"
+            "Any unsaved progress in the game will be lost.\n\n"
+            "Continue?",
+            icon='warning'
+        )
+        
+        if result == 'yes':
+            # Close the game
+            messagebox.showinfo(
+                "Closing Game",
+                "Closing Brickadia...\n\n"
+                "The game will restart automatically."
+            )
+            
+            if self.close_brickadia():
+                # Launch game after closing
+                self.launch_brickadia()
+            else:
+                messagebox.showerror(
+                    "Error",
+                    "Failed to close Brickadia.\n\n"
+                    "Please close it manually and click 'Launch Game'."
+                )
+    
     def launch_brickadia(self):
         """Launch Brickadia game"""
         try:
@@ -1495,7 +2128,7 @@ class BrickadiaModLoader:
             
             info_text = " | ".join(info_parts) if info_parts else ""
             
-            # Load icon if available
+            # Load icon if available, or use fallback
             icon_image = None
             icon_path = mod.get('icon', '')
             if icon_path and Path(icon_path).exists():
@@ -1507,6 +2140,10 @@ class BrickadiaModLoader:
                     self.mod_icons[mod_id] = icon_image
                 except Exception as e:
                     print(f"Failed to load icon for {mod['name']}: {e}")
+            
+            # If no icon loaded, use program logo as fallback
+            if not icon_image:
+                icon_image = self.get_fallback_icon_for_tree(mod_id)
             
             self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
                                values=(mod['name'], status, info_text))
@@ -1723,6 +2360,121 @@ class BrickadiaModLoader:
             padx=20,
             pady=5
         ).pack(side=tk.LEFT, padx=5)
+    
+    def open_paks_folder(self):
+        """Open the Paks folder in File Explorer"""
+        paks_path = Path(self.config['Paths']['brickadia_paks'])
+        
+        if not paks_path.exists():
+            messagebox.showerror(
+                "Folder Not Found",
+                f"The Paks folder does not exist:\n{paks_path}\n\n"
+                "Please make sure Brickadia is properly installed."
+            )
+            return
+        
+        try:
+            # Open the folder in Windows Explorer
+            import subprocess
+            subprocess.Popen(f'explorer "{paks_path}"')
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"Failed to open Paks folder:\n{str(e)}"
+            )
+    
+    def open_about(self):
+        """Show About dialog with version info and update check"""
+        about_window = tk.Toplevel(self.root)
+        about_window.title("About Brickadia Mod Loader")
+        about_window.geometry("450x350")
+        about_window.configure(bg="#1e1e1e")
+        about_window.transient(self.root)
+        about_window.resizable(False, False)
+        
+        # Center the window
+        about_window.update_idletasks()
+        x = (about_window.winfo_screenwidth() // 2) - (about_window.winfo_width() // 2)
+        y = (about_window.winfo_screenheight() // 2) - (about_window.winfo_height() // 2)
+        about_window.geometry(f"+{x}+{y}")
+        
+        # Logo if available
+        if hasattr(self, 'logo_ui_photo') and self.logo_ui_photo:
+            logo_label = tk.Label(about_window, image=self.logo_ui_photo, bg="#1e1e1e")
+            logo_label.pack(pady=(20, 10))
+        
+        # Title
+        tk.Label(
+            about_window,
+            text="Brickadia Mod Loader",
+            font=("Segoe UI", 18, "bold"),
+            bg="#1e1e1e",
+            fg="#ffffff"
+        ).pack(pady=(10, 5))
+        
+        # Version
+        tk.Label(
+            about_window,
+            text=f"Version {self.VERSION}",
+            font=("Segoe UI", 11),
+            bg="#1e1e1e",
+            fg="#888888"
+        ).pack(pady=5)
+        
+        # Description
+        tk.Label(
+            about_window,
+            text="A modern mod manager for Brickadia",
+            font=("Segoe UI", 10),
+            bg="#1e1e1e",
+            fg="#ffffff"
+        ).pack(pady=10)
+        
+        # Separator
+        tk.Frame(about_window, bg="#404040", height=1).pack(fill=tk.X, padx=40, pady=15)
+        
+        # Buttons frame
+        btn_frame = tk.Frame(about_window, bg="#1e1e1e")
+        btn_frame.pack(pady=10)
+        
+        # Check for Updates button
+        tk.Button(
+            btn_frame,
+            text="🔄 Check for Updates",
+            command=lambda: [about_window.destroy(), self.check_for_updates()],
+            bg=self.THEME_ACCENT,
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10, "bold"),
+            relief=tk.FLAT,
+            padx=20,
+            pady=10,
+            cursor="hand2",
+            activebackground=self.THEME_ACCENT_HOVER
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # GitHub button
+        tk.Button(
+            btn_frame,
+            text="🌐 View on GitHub",
+            command=lambda: webbrowser.open("https://github.com/Inxects1/BrickadiaModLoader"),
+            bg="#3a3a3a",
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            padx=20,
+            pady=10,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Footer
+        tk.Label(
+            about_window,
+            text="Made with ❤️ for the Brickadia community",
+            font=("Segoe UI", 9),
+            bg="#1e1e1e",
+            fg="#666666"
+        ).pack(side=tk.BOTTOM, pady=20)
     
     def open_game_settings(self):
         """Open GameUserSettings.ini editor"""

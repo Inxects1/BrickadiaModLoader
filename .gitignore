@@ -1,4 +1,6 @@
+# ==================================
 # Python
+# ==================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,7 +11,6 @@ venv/
 ENV/
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -22,31 +23,100 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+pip-log.txt
+pip-delete-this-directory.txt
 
+# ==================================
 # PyInstaller
+# ==================================
 *.manifest
-*.spec
+# Keep the spec file in scripts folder
+# *.spec
 
-# User configuration (don't share these)
+# ==================================
+# User Configuration & Data
+# (Keep these private - they contain personal paths and mod data)
+# ==================================
 config.ini
 mods.json
 
-# IDE
+# ==================================
+# Personal/Private Files
+# (Don't share these on GitHub)
+# ==================================
+project_structure.txt
+notes.txt
+todo.txt
+private/
+personal/
+
+# ==================================
+# Private Folders
+# (Keep these folders private)
+# ==================================
+build/
+dist/
+assets/
+docs/
+
+# ==================================
+# IDE & Editors
+# ==================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.code-workspace
 
-# OS
+# ==================================
+# Operating System
+# ==================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Build artifacts
-build/
-dist/
-*.exe (except releases)
+# ==================================
+# Build Artifacts
+# (Executables are too large for git)
+# ==================================
+*.exe
+*.app
+*.dmg
+*.deb
+*.rpm
 
-# Logs
+# ==================================
+# Logs & Temporary Files
+# ==================================
 *.log
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# ==================================
+# Test/Development Files
+# ==================================
+test_*.py
+*_test.py
+scratch.py
+temp/
+tmp/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==================================
+# Archived/Old Files
+# ==================================
+*.old
+archive/
+old/
+backup/
