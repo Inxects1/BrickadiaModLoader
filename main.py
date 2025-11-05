@@ -77,7 +77,7 @@ setup_winrar()
 
 
 class BrickadiaModLoader:
-    VERSION = "3.1.0"
+    VERSION = "3.2.0"
     GITHUB_REPO = "Inxects1/BrickadiaModLoader"
     
     # Theme Colors
@@ -652,6 +652,23 @@ class BrickadiaModLoader:
         )
         launch_btn.pack(side=tk.RIGHT, padx=5)
         ToolTip(launch_btn, "Launch Brickadia via Steam")
+        
+        # Uninstall UE4SS button
+        uninstall_ue4ss_btn = tk.Button(
+            actions_frame,
+            text="Uninstall UE4SS",
+            command=self.uninstall_ue4ss,
+            bg="#3a3a3a",
+            fg=self.THEME_TEXT,
+            font=("Segoe UI", 10),
+            relief=tk.FLAT,
+            padx=15,
+            pady=12,
+            cursor="hand2",
+            activebackground="#4a4a4a"
+        )
+        uninstall_ue4ss_btn.pack(side=tk.RIGHT, padx=5)
+        ToolTip(uninstall_ue4ss_btn, "Remove UE4SS from Brickadia")
         
         # Settings button
         settings_btn = tk.Button(
@@ -1239,12 +1256,28 @@ class BrickadiaModLoader:
                     )
                     return
             
-            # Find all .pak files in extracted content
+            # Detect mod type: PAK or UE4SS
             pak_files = list(temp_extract.rglob("*.pak"))
             
-            if not pak_files:
-                messagebox.showerror("Error", "No .pak files found in the archive!")
+            # UE4SS mod files: Lua scripts, Blueprint assets, C++ binaries
+            lua_files = list(temp_extract.rglob("*.lua"))
+            blueprint_files = list(temp_extract.rglob("*.uasset")) + list(temp_extract.rglob("*.umap"))
+            cpp_files = list(temp_extract.rglob("*.dll"))  # Compiled C++ mods
+            
+            # Determine mod type
+            ue4ss_files = lua_files + blueprint_files + cpp_files
+            is_ue4ss_mod = False
+            
+            if ue4ss_files and not pak_files:
+                is_ue4ss_mod = True
+            elif not pak_files and not ue4ss_files:
+                messagebox.showerror("Error", "No valid mod files found in the archive!\n\nSupported formats:\n- PAK mods: .pak files\n- UE4SS mods: .lua, .uasset, .umap, .dll files")
                 shutil.rmtree(temp_extract)
+                return
+            
+            # Handle UE4SS mods differently
+            if is_ue4ss_mod:
+                self.install_ue4ss_mod(temp_extract, archive_name)
                 return
             
             # Find all additional files (ucas, utoc, sig, etc.) that might come with the pak
@@ -1338,6 +1371,506 @@ class BrickadiaModLoader:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to install mod:\n{str(e)}")
     
+    def configure_ue4ss_settings(self, ue4ss_path):
+        """Configure UE4SS settings.ini file with recommended settings"""
+        try:
+            settings_file = ue4ss_path / 'UE4SS-settings.ini'
+            
+            settings_content = """[Overrides]
+; Path to the 'Mods' folder
+; Default: <dll_directory>/Mods
+ModsFolderPath =
+
+[General]
+EnableHotReloadSystem = 1
+
+; Whether the cache system for AOBs will be used.
+; Default: 1
+UseCache = 1
+
+; Whether caches will be invalidated if ue4ss.dll has changed
+; Default: 1
+InvalidateCacheIfDLLDiffers = 1
+
+; The number of seconds the scanner will scan for before giving up
+; Default: 30
+SecondsToScanBeforeGivingUp = 25
+
+; Whether to create UObject listeners in GUObjectArray to create a fast cache for use instead of iterating GUObjectArray.
+; Setting this to false can help if you're experiencing a crash on startup.
+; Default: true
+bUseUObjectArrayCache = true
+
+[EngineVersionOverride]
+MajorVersion = 5
+MinorVersion = 5
+; True if the game is built as Debug, Development, or Test.
+; Default: false
+DebugBuild = 
+
+[ObjectDumper]
+; Whether to force all assets to be loaded before dumping objects
+; WARNING: Can require multiple gigabytes of extra memory
+; WARNING: Is not stable & will crash the game if you load past the main menu after dumping
+; Default: 0
+LoadAllAssetsBeforeDumpingObjects = 0
+
+; Whether to display the offset from the main executable for functions instead of the function pointer
+; Default: 0
+UseModuleOffsets = 0
+
+[CXXHeaderGenerator]
+; Whether to property offsets and sizes
+; Default: 1
+DumpOffsetsAndSizes = 1
+
+; Whether memory layouts of classes and structs should be accurate
+; This must be set to 1, if you want to use the generated headers in an actual C++ project
+; When set to 0, padding member variables will not be generated
+; NOTE: A VALUE OF 1 HAS NO PURPOSE YET! MEMORY LAYOUT IS NOT ACCURATE EITHER WAY!
+; Default: 0
+KeepMemoryLayout = 0
+
+; Whether to force all assets to be loaded before generating headers
+; WARNING: Can require multiple gigabytes of extra memory
+; WARNING: Is not stable & will crash the game if you load past the main menu after dumping
+; Default: 0
+LoadAllAssetsBeforeGeneratingCXXHeaders = 0
+
+[UHTHeaderGenerator]
+; Whether to skip generating packages that belong to the engine
+; Some games make alterations to the engine and for those games you might want to set this to 0
+; Default: 0
+IgnoreAllCoreEngineModules = 0
+
+; Whether to skip generating the "Engine" and "CoreUObject" packages
+; Default: 0
+IgnoreEngineAndCoreUObject = 0
+
+; Whether to force all UFUNCTION macros to have "BlueprintCallable"
+; Note: This will cause some errors in the generated headers that you will need to manually fix
+; Default: 1
+MakeAllFunctionsBlueprintCallable = 1
+
+; Whether to force all UPROPERTY macros to have "BlueprintReadWrite"
+; Also forces all UPROPERTY macros to have "meta=(AllowPrivateAccess=true)"
+; Default: 1
+MakeAllPropertyBlueprintsReadWrite = 1
+
+; Whether to force UENUM macros on enums to have 'BlueprintType' if the underlying type was implicit or uint8
+; Note: This also forces the underlying type to be uint8 where the type would otherwise be implicit
+; Default: 1
+MakeEnumClassesBlueprintType = 1
+
+; Whether to force "Config = Engine" on all UCLASS macros that use either one of:
+; "DefaultConfig", "GlobalUserConfig" or "ProjectUserConfig"
+; Default: 1
+MakeAllConfigsEngineConfig = 1
+
+[Debug]
+; Whether to enable the external UE4SS debug console.
+ConsoleEnabled = 1
+GuiConsoleEnabled = 1
+GuiConsoleVisible = 1
+
+; Multiplier for Font Size within the Debug Gui
+; Default: 1
+GuiConsoleFontScaling = 1
+
+; The API that will be used to render the GUI debug window.
+; Valid values (case-insensitive): dx11, d3d11, opengl
+; Default: opengl
+GraphicsAPI = d3d11
+
+; The method with which the GUI will be rendered.
+; Valid values (case-insensitive):
+; ExternalThread: A separate thread will be used.
+; EngineTick: The UEngine::Tick function will be used.
+; GameViewportClientTick: The UGameViewportClient::Tick function will be used.
+; Default: ExternalThread
+RenderMode = ExternalThread
+
+[Threads]
+; The number of threads that the sig scanner will use (not real cpu threads, can be over your physical & hyperthreading max)
+; If the game is modular then multi-threading will always be off regardless of the settings in this file
+; Min: 1
+; Max: 4294967295
+; Default: 8
+SigScannerNumThreads = 4
+
+; The minimum size that a module has to be in order for multi-threading to be enabled
+; This should be large enough so that the cost of creating threads won't out-weigh the speed gained from scanning in multiple threads
+; Min: 0
+; Max: 4294967295
+; Default: 16777216
+SigScannerMultithreadingModuleSizeThreshold = 16777216
+
+[Memory]
+; The maximum memory usage (in percentage, see Task Manager %) allowed before asset loading (when LoadAllAssetsBefore* is 1) cannot happen.
+; Once this percentage is reached, the asset loader will stop loading and whatever operation was in progress (object dump, or cxx generator) will continue.
+; Default: 85
+MaxMemoryUsageDuringAssetLoading = 85
+
+[Hooks]
+HookProcessInternal = 1
+HookProcessLocalScriptFunction = 1
+HookInitGameState = 1
+HookLoadMap = 1
+HookCallFunctionByNameWithArguments = 1
+HookBeginPlay = 1
+HookLocalPlayerExec = 1
+HookAActorTick = 1
+HookEngineTick = 1
+HookGameViewportClientTick = 1
+FExecVTableOffsetInLocalPlayer = 0x28
+
+[CrashDump]
+EnableDumping = 1
+FullMemoryDump = 0
+
+[ExperimentalFeatures]
+"""
+            
+            with open(settings_file, 'w', encoding='utf-8') as f:
+                f.write(settings_content)
+                
+        except Exception as e:
+            print(f"Warning: Failed to configure UE4SS settings: {e}")
+    
+    def uninstall_ue4ss(self):
+        """Uninstall UE4SS from Brickadia"""
+        try:
+            if not self.config['Paths']['brickadia_paks']:
+                messagebox.showerror("Error", "Please configure Brickadia Paks folder in Settings first!")
+                return
+            
+            game_base = Path(self.config['Paths']['brickadia_paks']).parent.parent
+            ue4ss_path = game_base / 'Binaries' / 'Win64'
+            ue4ss_dll = ue4ss_path / 'UE4SS.dll'
+            
+            if not ue4ss_dll.exists():
+                messagebox.showinfo("Not Installed", "UE4SS is not currently installed.")
+                return
+            
+            result = messagebox.askyesno(
+                "Confirm Uninstall",
+                "Are you sure you want to uninstall UE4SS?\n\n"
+                "This will remove:\n"
+                "- UE4SS.dll\n"
+                "- UE4SS-settings.ini\n"
+                "- dwmapi.dll (UE4SS proxy)\n"
+                "- Related UE4SS files\n\n"
+                "Your installed mods will remain but won't work until UE4SS is reinstalled.\n\n"
+                "Continue with uninstallation?"
+            )
+            
+            if not result:
+                return
+            
+            # First, disable all UE4SS mods
+            ue4ss_mods_disabled = 0
+            for mod_id, mod in self.mods.items():
+                if mod.get('mod_type') == 'UE4SS' and mod.get('enabled'):
+                    self.disable_mod(mod_id)
+                    ue4ss_mods_disabled += 1
+            
+            # List of UE4SS files to remove
+            ue4ss_files = [
+                'UE4SS.dll',
+                'UE4SS.pdb',
+                'UE4SS-settings.ini',
+                'dwmapi.dll',
+                'dwmapi.pdb',
+                'UE4SS_Signatures'
+            ]
+            
+            removed_count = 0
+            for file_name in ue4ss_files:
+                file_path = ue4ss_path / file_name
+                if file_path.exists():
+                    if file_path.is_file():
+                        file_path.unlink()
+                        removed_count += 1
+                    elif file_path.is_dir():
+                        shutil.rmtree(file_path, ignore_errors=True)
+                        removed_count += 1
+            
+            # Refresh the mod list to show disabled mods
+            self.refresh_mod_list()
+            
+            messagebox.showinfo(
+                "Uninstalled",
+                f"UE4SS has been successfully uninstalled!\n\n"
+                f"Removed {removed_count} UE4SS file(s)/folder(s).\n"
+                f"Disabled {ue4ss_mods_disabled} UE4SS mod(s).\n\n"
+                "Your UE4SS mods remain installed but are now disabled.\n"
+                "They will be re-enabled when you reinstall UE4SS."
+            )
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to uninstall UE4SS:\n{str(e)}")
+    
+    def download_and_install_ue4ss(self):
+        """Download and install UE4SS for Brickadia using br_patcher.exe"""
+        try:
+            game_base = Path(self.config['Paths']['brickadia_paks']).parent.parent
+            ue4ss_path = game_base / 'Binaries' / 'Win64'
+            
+            # Download URLs from br-lua-patcher release
+            br_patcher_url = "https://github.com/brickadia-community/br-lua-patcher/releases/download/latest/br_patcher.exe"
+            dwmapi_url = "https://github.com/brickadia-community/br-lua-patcher/releases/download/latest/dwmapi.dll"
+            ue4ss_dll_url = "https://github.com/brickadia-community/br-lua-patcher/releases/download/latest/UE4SS.dll"
+            
+            # Show progress dialog
+            progress_window = tk.Toplevel(self.root)
+            progress_window.title("Installing UE4SS")
+            progress_window.geometry("400x150")
+            progress_window.transient(self.root)
+            progress_window.grab_set()
+            
+            # Center the window
+            progress_window.update_idletasks()
+            x = (progress_window.winfo_screenwidth() // 2) - (400 // 2)
+            y = (progress_window.winfo_screenheight() // 2) - (150 // 2)
+            progress_window.geometry(f"400x150+{x}+{y}")
+            
+            status_label = tk.Label(progress_window, text="Downloading files...", font=("Segoe UI", 10))
+            status_label.pack(pady=20)
+            
+            progress_bar = ttk.Progressbar(progress_window, length=350, mode='indeterminate')
+            progress_bar.pack(pady=10)
+            progress_bar.start(10)
+            
+            progress_window.update()
+            
+            # Step 1: Download all required files to Brickadia binary directory
+            os.makedirs(ue4ss_path, exist_ok=True)
+            
+            status_label.config(text="Downloading br_patcher.exe...")
+            progress_window.update()
+            br_patcher_path = ue4ss_path / "br_patcher.exe"
+            urllib.request.urlretrieve(br_patcher_url, br_patcher_path)
+            
+            status_label.config(text="Downloading UE4SS DLLs...")
+            progress_window.update()
+            
+            dwmapi_path = ue4ss_path / "dwmapi.dll"
+            urllib.request.urlretrieve(dwmapi_url, dwmapi_path)
+            
+            ue4ss_dll_path = ue4ss_path / "UE4SS.dll"
+            urllib.request.urlretrieve(ue4ss_dll_url, ue4ss_dll_path)
+            
+            # Step 2: Run br_patcher.exe from the Brickadia directory
+            progress_bar.stop()
+            progress_window.destroy()
+            
+            # Show instructions to user
+            result = messagebox.askokcancel(
+                "Run Patcher",
+                f"The br_patcher.exe has been downloaded to:\n{ue4ss_path}\n\n"
+                "A console window will now open.\n"
+                "Please follow the prompts in the window to patch Brickadia.\n\n"
+                "Click OK to continue, then press any key in the console window when prompted."
+            )
+            
+            if not result:
+                raise Exception("User cancelled patching process")
+            
+            import subprocess
+            # Run the patcher with a visible console window
+            process = subprocess.Popen(
+                [str(br_patcher_path)],
+                cwd=str(ue4ss_path),
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
+            )
+            
+            # Wait for the user to complete the patching
+            process.wait()
+            
+            # Show progress dialog again
+            progress_window = tk.Toplevel(self.root)
+            progress_window.title("Installing UE4SS")
+            progress_window.geometry("400x150")
+            progress_window.transient(self.root)
+            progress_window.grab_set()
+            
+            progress_window.update_idletasks()
+            x = (progress_window.winfo_screenwidth() // 2) - (400 // 2)
+            y = (progress_window.winfo_screenheight() // 2) - (150 // 2)
+            progress_window.geometry(f"400x150+{x}+{y}")
+            
+            status_label = tk.Label(progress_window, text="Finalizing installation...", font=("Segoe UI", 10))
+            status_label.pack(pady=20)
+            
+            progress_bar = ttk.Progressbar(progress_window, length=350, mode='indeterminate')
+            progress_bar.pack(pady=10)
+            progress_bar.start(10)
+            progress_window.update()
+            
+            # Step 3: Create Mods folder
+            status_label.config(text="Setting up Mods folder...")
+            progress_window.update()
+            
+            mods_folder = ue4ss_path / "Mods"
+            os.makedirs(mods_folder, exist_ok=True)
+            
+            # Step 4: Configure settings.ini
+            status_label.config(text="Configuring UE4SS settings...")
+            progress_window.update()
+            
+            self.configure_ue4ss_settings(ue4ss_path)
+            
+            progress_bar.stop()
+            progress_window.destroy()
+            
+            messagebox.showinfo(
+                "Success",
+                "UE4SS has been successfully installed for Brickadia!\n\n"
+                "✓ Brickadia executable has been patched (br_patcher.exe)\n"
+                "✓ UE4SS DLLs installed (br-lua-patcher build)\n"
+                "✓ Settings configured for optimal performance\n"
+                f"✓ Mods folder created: {mods_folder}\n\n"
+                "You can now enable your Lua/Blueprint/C++ mods!"
+            )
+            return True
+            
+        except Exception as e:
+            if 'progress_window' in locals():
+                progress_window.destroy()
+            error_msg = str(e)
+            messagebox.showerror(
+                "Installation Failed",
+                f"Failed to install UE4SS:\n{error_msg}\n\n"
+                "The br_patcher.exe has been downloaded to:\n"
+                f"{ue4ss_path}\n\n"
+                "Please try running it manually from that location."
+            )
+            return False
+    
+    def install_ue4ss_mod(self, temp_extract, archive_name):
+        """Install a UE4SS mod (Lua, Blueprint, or C++)"""
+        try:
+            # Find all UE4SS mod files
+            lua_files = list(temp_extract.rglob("*.lua"))
+            blueprint_files = list(temp_extract.rglob("*.uasset")) + list(temp_extract.rglob("*.umap"))
+            cpp_files = list(temp_extract.rglob("*.dll"))
+            all_files = list(temp_extract.rglob("*"))
+            all_files = [f for f in all_files if f.is_file()]
+            
+            # Detect mod subtype
+            mod_subtype = []
+            if lua_files:
+                mod_subtype.append("Lua")
+            if blueprint_files:
+                mod_subtype.append("Blueprint")
+            if cpp_files:
+                mod_subtype.append("C++")
+            
+            mod_subtype_str = "/".join(mod_subtype) if mod_subtype else "UE4SS"
+            
+            # Look for modinfo.json
+            mod_info = None
+            modinfo_files = list(temp_extract.rglob("modinfo.json"))
+            if modinfo_files:
+                try:
+                    with open(modinfo_files[0], 'r', encoding='utf-8') as f:
+                        mod_info = json.load(f)
+                except:
+                    mod_info = None
+            
+            # Determine mod name
+            if mod_info and 'name' in mod_info:
+                display_name = mod_info['name']
+                mod_name = display_name.replace(' ', '_')
+            else:
+                display_name = archive_name
+                mod_name = archive_name
+            
+            # Create mod folder
+            mod_folder = Path(self.mods_storage_path) / mod_name
+            counter = 1
+            while mod_folder.exists():
+                mod_folder = Path(self.mods_storage_path) / f"{mod_name}_{counter}"
+                counter += 1
+            
+            os.makedirs(mod_folder, exist_ok=True)
+            
+            # Copy all files
+            file_list = []
+            for file in all_files:
+                relative_path = file.relative_to(temp_extract)
+                dest_file = mod_folder / relative_path
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, dest_file)
+                file_list.append(str(relative_path))
+            
+            # Look for icon
+            icon_dest = None
+            if mod_info and 'icon' in mod_info:
+                icon_files = list(temp_extract.rglob(mod_info['icon']))
+                if icon_files:
+                    icon_dest = mod_folder / f"icon{icon_files[0].suffix}"
+                    shutil.copy2(icon_files[0], icon_dest)
+            
+            # Add to mods database
+            mod_id = mod_folder.name
+            default_desc = f"UE4SS Mod ({mod_subtype_str})"
+            self.mods[mod_id] = {
+                'name': display_name,
+                'folder': str(mod_folder),
+                'files': file_list,
+                'enabled': False,
+                'mod_type': 'UE4SS',  # Mark as UE4SS mod
+                'description': mod_info.get('description', default_desc) if mod_info else default_desc,
+                'author': mod_info.get('author', '') if mod_info else '',
+                'version': mod_info.get('version', '') if mod_info else '',
+                'icon': str(icon_dest) if icon_dest else ''
+            }
+            
+            # Clean up
+            shutil.rmtree(temp_extract)
+            
+            # Save and refresh
+            self.save_mods()
+            self.refresh_mod_list()
+            
+            # Check if UE4SS is installed
+            game_base = Path(self.config['Paths']['brickadia_paks']).parent.parent
+            ue4ss_dll = game_base / 'Binaries' / 'Win64' / 'UE4SS.dll'
+            
+            if ue4ss_dll.exists():
+                messagebox.showinfo("Success", f"Installed UE4SS mod: {display_name}\nType: {mod_subtype_str}\n\n✓ UE4SS detected in your Brickadia folder.")
+            else:
+                # Offer to download UE4SS
+                result = messagebox.askyesnocancel(
+                    "UE4SS Not Found",
+                    f"Installed UE4SS mod: {display_name}\nType: {mod_subtype_str}\n\n"
+                    "⚠ WARNING: UE4SS is not installed!\n\n"
+                    "This mod requires UE4SS to work.\n\n"
+                    "Would you like to download and install UE4SS automatically?\n\n"
+                    "Yes = Download and install UE4SS now\n"
+                    "No = I'll install it manually later\n"
+                    "Cancel = View installation instructions"
+                )
+                
+                if result is True:  # Yes - download
+                    self.download_and_install_ue4ss()
+                elif result is None:  # Cancel - show instructions
+                    messagebox.showinfo(
+                        "Manual Installation Instructions",
+                        "To install UE4SS for Brickadia manually:\n\n"
+                        "1. Download br_patcher.exe from:\n"
+                        "   https://github.com/brickadia-community/br-lua-patcher/releases\n"
+                        "2. Run br_patcher.exe in your Brickadia folder\n"
+                        "3. Follow prompts to patch the game\n\n"
+                        "This will install UE4SS specifically compiled for Brickadia.\n\n"
+                        "The mod has been installed but will not work until UE4SS is installed."
+                    )
+            
+        except Exception as e:
+            shutil.rmtree(temp_extract, ignore_errors=True)
+            messagebox.showerror("Error", f"Failed to install UE4SS mod:\n{str(e)}")
+    
     def enable_selected_mod(self):
         """Enable the selected mod"""
         selection = self.mod_tree.selection()
@@ -1388,7 +1921,7 @@ class BrickadiaModLoader:
         self.refresh_mod_list()
     
     def enable_mod(self, mod_id):
-        """Enable a mod by copying all its files to Brickadia paks folder"""
+        """Enable a mod by copying all its files to appropriate folder"""
         mod = self.mods[mod_id]
         
         if mod['enabled']:
@@ -1397,27 +1930,78 @@ class BrickadiaModLoader:
         
         try:
             mod_folder = Path(mod['folder'])
-            game_paks = Path(self.config['Paths']['brickadia_paks'])
+            mod_type = mod.get('mod_type', 'PAK')  # Default to PAK for old mods
             
             if not mod_folder.exists():
                 messagebox.showerror("Error", f"Mod folder not found:\n{mod_folder}")
                 return
             
-            # Copy all mod files to game directory
-            game_paths = []
-            for file_name in mod['files']:
-                source = mod_folder / file_name
-                destination = game_paks / file_name
+            if mod_type == 'UE4SS':
+                # UE4SS mods go to Brickadia/Binaries/Win64/Mods/
+                game_base = Path(self.config['Paths']['brickadia_paks']).parent.parent
+                ue4ss_mods = game_base / 'Binaries' / 'Win64' / 'Mods' / mod['name'].replace(' ', '_')
                 
-                if source.exists():
-                    shutil.copy2(source, destination)
-                    game_paths.append(str(destination))
-            
-            mod['enabled'] = True
-            mod['game_paths'] = game_paths
-            self.save_mods()
-            
-            messagebox.showinfo("Success", f"Enabled: {mod['name']}")
+                # Check if UE4SS is installed
+                ue4ss_dll = game_base / 'Binaries' / 'Win64' / 'UE4SS.dll'
+                if not ue4ss_dll.exists():
+                    result = messagebox.askyesnocancel(
+                        "UE4SS Not Found",
+                        "⚠ UE4SS is NOT installed in your Brickadia folder!\n\n"
+                        "This UE4SS mod requires UE4SS to work.\n\n"
+                        "Would you like to download and install UE4SS now?\n\n"
+                        "Yes = Download and install UE4SS, then enable mod\n"
+                        "No = Enable mod anyway (won't work until UE4SS is installed)\n"
+                        "Cancel = Don't enable the mod"
+                    )
+                    
+                    if result is True:  # Yes - download UE4SS
+                        if self.download_and_install_ue4ss():
+                            # Continue enabling the mod after successful installation
+                            pass
+                        else:
+                            return  # Download failed, abort
+                    elif result is False:  # No - enable anyway
+                        pass  # Continue with enabling
+                    else:  # Cancel
+                        return
+                
+                os.makedirs(ue4ss_mods, exist_ok=True)
+                
+                # Copy all mod files preserving structure
+                game_paths = []
+                for file_name in mod['files']:
+                    source = mod_folder / file_name
+                    destination = ue4ss_mods / file_name
+                    
+                    if source.exists():
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(source, destination)
+                        game_paths.append(str(destination))
+                
+                mod['enabled'] = True
+                mod['game_paths'] = game_paths
+                self.save_mods()
+                
+                messagebox.showinfo("Success", f"Enabled UE4SS mod: {mod['name']}")
+            else:
+                # Regular PAK mods go to Paks folder
+                game_paks = Path(self.config['Paths']['brickadia_paks'])
+                
+                # Copy all mod files to game directory
+                game_paths = []
+                for file_name in mod['files']:
+                    source = mod_folder / file_name
+                    destination = game_paks / file_name
+                    
+                    if source.exists():
+                        shutil.copy2(source, destination)
+                        game_paths.append(str(destination))
+                
+                mod['enabled'] = True
+                mod['game_paths'] = game_paths
+                self.save_mods()
+                
+                messagebox.showinfo("Success", f"Enabled: {mod['name']}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to enable mod:\n{str(e)}")
     
@@ -1430,11 +2014,21 @@ class BrickadiaModLoader:
             return
         
         try:
-            # Remove all mod files from game directory
-            for game_path_str in mod.get('game_paths', []):
-                game_path = Path(game_path_str)
-                if game_path.exists():
-                    os.remove(game_path)
+            mod_type = mod.get('mod_type', 'PAK')
+            
+            if mod_type == 'UE4SS':
+                # For UE4SS mods, remove the entire mod folder
+                game_base = Path(self.config['Paths']['brickadia_paks']).parent.parent
+                ue4ss_mod_folder = game_base / 'Binaries' / 'Win64' / 'Mods' / mod['name'].replace(' ', '_')
+                
+                if ue4ss_mod_folder.exists():
+                    shutil.rmtree(ue4ss_mod_folder)
+            else:
+                # For PAK mods, remove individual files
+                for game_path_str in mod.get('game_paths', []):
+                    game_path = Path(game_path_str)
+                    if game_path.exists():
+                        os.remove(game_path)
             
             mod['enabled'] = False
             if 'game_paths' in mod:
@@ -2118,6 +2712,10 @@ class BrickadiaModLoader:
             # Add mod to list
             status = "✓ Enabled" if mod['enabled'] else "✗ Disabled"
             
+            # Add mod type badge to name
+            mod_type = mod.get('mod_type', 'PAK')  # Default to PAK for backward compatibility
+            mod_name = f"[{mod_type}] {mod['name']}"
+            
             info_parts = []
             if mod.get('description'):
                 info_parts.append(mod['description'])
@@ -2146,7 +2744,7 @@ class BrickadiaModLoader:
                 icon_image = self.get_fallback_icon_for_tree(mod_id)
             
             self.mod_tree.insert("", tk.END, iid=mod_id, image=icon_image if icon_image else "", 
-                               values=(mod['name'], status, info_text))
+                               values=(mod_name, status, info_text))
             filtered_count += 1
         
         # Update mod count label

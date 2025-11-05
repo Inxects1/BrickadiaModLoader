@@ -1,0 +1,7 @@
+{
+    "name": "Test UE4SS Mod",
+    "description": "A simple test mod for UE4SS that demonstrates Lua scripting",
+    "author": "Brickadia Mod Loader",
+    "version": "1.0.0",
+    "icon": "icon.png"
+}
